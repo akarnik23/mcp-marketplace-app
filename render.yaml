@@ -1,0 +1,34 @@
+services:
+  # Backend API Service
+  - type: web
+    name: mcp-marketplace-backend
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mcp-marketplace-db
+          property: connectionString
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_REDIRECT_URI
+        value: https://mcp-marketplace-backend.onrender.com/auth/github/callback
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://mcp-marketplace.vercel.app
+
+  # PostgreSQL Database
+  - type: pserv
+    name: mcp-marketplace-db
+    env: postgresql
+    region: oregon
+    plan: starter
+
