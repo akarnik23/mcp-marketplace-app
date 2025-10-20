@@ -35,14 +35,18 @@ export default function Settings() {
     checkAuth();
     loadDeployments();
     
-    // Load API key from localStorage
-    const storedApiKey = localStorage.getItem('render_api_key');
-    if (storedApiKey) {
-      setRenderApiKey(storedApiKey);
+    // Load API key from localStorage (client-side only)
+    if (typeof window !== 'undefined') {
+      const storedApiKey = localStorage.getItem('render_api_key');
+      if (storedApiKey) {
+        setRenderApiKey(storedApiKey);
+      }
     }
   }, []);
 
   const checkAuth = async () => {
+    if (typeof window === 'undefined') return;
+    
     const token = localStorage.getItem('access_token');
     if (token) {
       try {
@@ -90,7 +94,9 @@ export default function Settings() {
 
   const updateApiKey = () => {
     if (newApiKey.trim()) {
-      localStorage.setItem('render_api_key', newApiKey.trim());
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('render_api_key', newApiKey.trim());
+      }
       setRenderApiKey(newApiKey.trim());
       setNewApiKey('');
       setShowApiKeyInput(false);
@@ -98,14 +104,18 @@ export default function Settings() {
   };
 
   const clearApiKey = () => {
-    localStorage.removeItem('render_api_key');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('render_api_key');
+    }
     setRenderApiKey('');
   };
 
   const copyToClipboard = (url: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedUrl(url);
-    setTimeout(() => setCopiedUrl(''), 2000);
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      setTimeout(() => setCopiedUrl(''), 2000);
+    }
   };
 
   const getStatusColor = (status: string) => {

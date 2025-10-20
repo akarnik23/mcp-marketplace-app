@@ -1,125 +1,62 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, CheckCircle, ExternalLink, Zap, Wrench, Github, Settings } from 'lucide-react';
+import { Zap, Wrench, ExternalLink, Github, Settings } from 'lucide-react';
 import Link from 'next/link';
-
-interface MCPTemplate {
-  name: string;
-  description: string;
-  required_keys: string[];
-  template: string;
-}
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  avatar_url: string;
-}
-
-interface MCPService {
-  id: string;
-  name: string;
-  url: string;
-  status: string;
-}
-
-interface MCPTemplate {
-  name: string;
-  description: string;
-  required_keys: string[];
-  template: string;
-}
-
-interface UserServiceData {
-  available: boolean;
-  services: MCPService[];
-  template: MCPTemplate;
-  setup_url?: string;
-}
-
-const mcpIcons: { [key: string]: string } = {
-  'news': '/news.png',
-  'weather': '/weather.png',
-  'github': '/github.png',
-  'reddit': '/reddit.png',
-  'spotify': '/spotify.png',
-  'hackernews': '/hackerNews.png'
-};
-
-const mcpCapabilities: { [key: string]: string[] } = {
-  'news': ['get_headlines', 'search_news', 'get_category_news', 'get_rss_feed'],
-  'weather': ['get_current_weather', 'get_forecast', 'get_weather_alerts'],
-  'github': ['get_repos', 'get_issues', 'get_pull_requests', 'search_code'],
-  'reddit': ['get_subreddit_posts', 'search_reddit', 'get_user_posts'],
-  'spotify': ['search_tracks', 'search_artists', 'get_artist_top_tracks'],
-  'hackernews': ['get_top_stories', 'get_story', 'get_new_stories', 'search_stories']
-};
+import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars } from './types';
+import { API_BASE_URL, ERROR_MESSAGES, MCP_ICONS } from './constants';
+import { useAuth } from './hooks/useAuth';
+import { useRenderApiKey } from './hooks/useRenderApiKey';
+import { apiRequest, handleApiError } from './utils/api';
+import { MCPCard } from './components/MCPCard';
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading, logout, startGitHubAuth } = useAuth();
+  const { apiKey: renderApiKey, updateApiKey, clearApiKey } = useRenderApiKey();
+  
   const [templates, setTemplates] = useState<MCPTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copiedUrl, setCopiedUrl] = useState<string>('');
-  const [deployments, setDeployments] = useState<{[key: string]: {url: string, status: string}}>({});
+  const [deployments, setDeployments] = useState<DeploymentStatuses>({});
   const [deploying, setDeploying] = useState<string | null>(null);
-  const [userServices, setUserServices] = useState<{[key: string]: UserServiceData}>({});
-  const [renderApiKey, setRenderApiKey] = useState<string>('');
+  const [userServices, setUserServices] = useState<Record<string, UserServiceData>>({});
   const [detectingServices, setDetectingServices] = useState<boolean>(false);
   const [apiKeyError, setApiKeyError] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
   const [newApiKey, setNewApiKey] = useState<string>('');
-  const [showEnvVars, setShowEnvVars] = useState<{[key: string]: boolean}>({});
-  const [envVars, setEnvVars] = useState<{[key: string]: {[key: string]: string}}>({});
+  const [showEnvVars, setShowEnvVars] = useState<ShowEnvVars>({});
+  const [envVars, setEnvVars] = useState<EnvVars>({});
+  const [copiedUrl, setCopiedUrl] = useState<string>('');
 
   useEffect(() => {
     fetchTemplates();
-    checkAuth();
-    
-    // Load API key from localStorage on page refresh
-    const storedApiKey = localStorage.getItem('render_api_key');
-    if (storedApiKey) {
-      setRenderApiKey(storedApiKey);
-    }
   }, []);
 
   const fetchTemplates = async () => {
     try {
-      console.log('Fetching templates from backend...');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/mcps/templates`);
-      console.log('Response status:', response.status);
+      const response = await apiRequest('/mcps/templates');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('Templates data:', data);
       setTemplates(Object.values(data.templates));
     } catch (error) {
       console.error('Error fetching templates:', error);
       setTemplates([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   const detectUserServices = async (apiKey: string) => {
-    if (detectingServices) {
-      return null;
-    }
+    if (detectingServices) return null;
     
     setDetectingServices(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/mcps/detect-services`, {
+      const response = await apiRequest('/mcps/detect-services', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          render_api_key: apiKey
-        })
+        body: JSON.stringify({ render_api_key: apiKey })
       });
       
       if (!response.ok) {
@@ -131,10 +68,7 @@ export default function Home() {
       }
       
       const data = await response.json();
-      
-      // Return the detected data so we can use it immediately
       return data.detected_mcps;
-      
     } catch (error) {
       console.error('Error detecting services:', error);
       if (error instanceof Error && error.message === 'INVALID_API_KEY') {
@@ -146,68 +80,30 @@ export default function Home() {
     }
   };
 
-  const checkAuth = async () => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      try {
-        // Verify token with backend
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-        } else {
-          // Token is invalid, clear it
-          localStorage.removeItem('access_token');
-        }
-      } catch (error) {
-        console.error('Error checking auth:', error);
-        localStorage.removeItem('access_token');
-      }
-    }
-    setLoading(false);
-  };
-
   const handleGitHubAuth = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/auth/github`);
-      const data = await response.json();
-      
-      // Always use real GitHub OAuth
-      window.location.href = data.auth_url;
+      await startGitHubAuth();
     } catch (error) {
       console.error('Error starting GitHub auth:', error);
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    setUser(null);
   };
 
   const clearApiKeyError = () => {
     setApiKeyError('');
   };
 
-  const updateApiKey = () => {
+  const handleUpdateApiKey = () => {
     if (newApiKey.trim()) {
-      localStorage.setItem('render_api_key', newApiKey.trim());
-      setRenderApiKey(newApiKey.trim());
+      updateApiKey(newApiKey);
       setNewApiKey('');
       setShowApiKeyInput(false);
       setApiKeyError('');
-      // Clear any existing user services to force re-detection
       setUserServices({});
     }
   };
 
-  const clearApiKey = () => {
-    localStorage.removeItem('render_api_key');
-    setRenderApiKey('');
+  const handleClearApiKey = () => {
+    clearApiKey();
     setUserServices({});
     setApiKeyError('');
   };
@@ -233,17 +129,6 @@ export default function Home() {
     return envVars[templateKey]?.[keyName] || '';
   };
 
-  const copyToClipboard = (url: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedUrl(url);
-    setTimeout(() => setCopiedUrl(''), 2000);
-  };
-
-  const addToPoke = (url: string) => {
-    copyToClipboard(url);
-    window.open('https://poke.com/settings/connections', '_blank', 'noopener,noreferrer');
-  };
-
   const deployMCP = async (templateKey: string, template: MCPTemplate) => {
     if (!user) return;
     
@@ -251,58 +136,46 @@ export default function Home() {
     if (template.required_keys.length > 0) {
       const missingKeys = template.required_keys.filter((key: string) => !getEnvVarValue(templateKey, key));
       if (missingKeys.length > 0) {
-        alert(`Please fill in the required API keys: ${missingKeys.join(', ')}`);
+        alert(`${ERROR_MESSAGES.MISSING_API_KEYS} ${missingKeys.join(', ')}`);
         return;
       }
     }
     
-    setDeploying(templateKey); // Set deploying state immediately
+    setDeploying(templateKey);
     
     try {
-      // Check if user has this MCP already set up
       let mcpData = userServices[templateKey];
       
       if (!mcpData) {
-        // Need to detect services first
-        let renderApiKey = localStorage.getItem('render_api_key');
-        
         if (!renderApiKey) {
-          renderApiKey = prompt('Please enter your Render API key to detect your services:');
-          if (!renderApiKey) {
-            alert('Render API key is required');
+          const userApiKey = prompt('Please enter your Render API key to detect your services:');
+          if (!userApiKey) {
+            alert(ERROR_MESSAGES.API_KEY_REQUIRED);
             setDeploying(null);
             return;
           }
-          localStorage.setItem('render_api_key', renderApiKey);
+          updateApiKey(userApiKey);
         }
         
-        setRenderApiKey(renderApiKey);
-        
-        // Detect services but only update state for the specific MCP clicked
         try {
           const detectedServices = await detectUserServices(renderApiKey);
           
           if (detectedServices) {
-            // Only update the state for the specific MCP that was clicked
             setUserServices(prev => ({
               ...prev,
               [templateKey]: detectedServices[templateKey]
             }));
-            
-            // Now use the detected data directly for this function
             mcpData = detectedServices[templateKey];
           }
         } catch (error) {
           if (error instanceof Error && error.message === 'INVALID_API_KEY') {
-            setApiKeyError('Invalid Render API key. Please check your API key and try again.');
+            setApiKeyError(ERROR_MESSAGES.INVALID_API_KEY);
             setDeploying(null);
             return;
           }
-          // For other errors, continue with the flow
         }
       }
       
-      // If no MCP data was found or it's not available, update UI to show setup required
       if (!mcpData || !mcpData.available) {
         setUserServices(prev => ({
           ...prev,
@@ -317,16 +190,13 @@ export default function Home() {
         return;
       }
       
-      // User has this MCP - proceed with deployment to resume the service
       if (!mcpData.available || !mcpData.services || mcpData.services.length === 0) {
         setDeploying(null);
         return;
       }
       
-      const service = mcpData.services[0]; // Use the first available service
-      const renderApiKey = localStorage.getItem('render_api_key');
+      const service = mcpData.services[0];
       
-      // Show loading state
       setDeployments(prev => ({
         ...prev,
         [templateKey]: {
@@ -335,13 +205,8 @@ export default function Home() {
         }
       }));
       
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/mcps/deploy`, {
+      const response = await apiRequest('/mcps/deploy', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({
           template_id: templateKey,
           env_vars: envVars[templateKey] || {},
@@ -352,13 +217,11 @@ export default function Home() {
       
       if (!response.ok) {
         const error = await response.json();
-        console.error('Backend error:', error);
         throw new Error(error.detail || error.message || 'Deployment failed');
       }
       
       const data = await response.json();
       
-      // Update to show live status
       setDeployments(prev => ({
         ...prev,
         [templateKey]: {
@@ -369,7 +232,6 @@ export default function Home() {
       
     } catch (error) {
       console.error(`Error deploying ${templateKey}:`, error);
-      // Still show the URL even if deployment fails
       if (userServices[templateKey]?.services?.[0]?.url) {
         setDeployments(prev => ({
           ...prev,
@@ -384,33 +246,7 @@ export default function Home() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'live':
-        return 'bg-emerald-900/30 text-emerald-300 border border-emerald-700';
-      case 'deploying':
-        return 'bg-yellow-900/30 text-yellow-300 border border-yellow-700';
-      case 'offline':
-        return 'bg-red-900/30 text-red-300 border border-red-700';
-      default:
-        return 'bg-slate-800 text-slate-200 border border-slate-700';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'live':
-        return 'Live';
-      case 'deploying':
-        return 'Deploying';
-      case 'offline':
-        return 'Offline';
-      default:
-        return 'Deploy';
-    }
-  };
-
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(to bottom, #203a54, #000000)' }}>
         <div className="text-center">
@@ -452,7 +288,7 @@ export default function Home() {
                     Settings
                   </Link>
                   <button
-                    onClick={handleLogout}
+                    onClick={logout}
                     className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
                     style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
                   >
@@ -508,7 +344,7 @@ export default function Home() {
                       Change Key
                     </button>
                     <button
-                      onClick={clearApiKey}
+                      onClick={handleClearApiKey}
                       className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded"
                     >
                       Clear Key
@@ -544,7 +380,7 @@ export default function Home() {
                   className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
-                  onClick={updateApiKey}
+                  onClick={handleUpdateApiKey}
                   disabled={!newApiKey.trim()}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded"
                 >
@@ -613,200 +449,29 @@ export default function Home() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {templates.map((template, index) => {
-                  // More precise matching to avoid "hackernews" matching "news"
-                  const templateKey = Object.keys(mcpIcons).find(key => {
+                  const templateKey = Object.keys(MCP_ICONS).find(key => {
                     const templateName = template.name.toLowerCase();
                     const keyName = key.toLowerCase();
-                    // Check for exact word match or specific patterns
                     return templateName === `${keyName} mcp` || 
                            templateName === `mcp ${keyName}` ||
                            templateName === keyName;
                   }) || 'news';
                   
                   return (
-                    <div key={index} className="rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow flex flex-col" style={{ background: '#203a54', border: '1px solid #718392' }}>
-                      <div className="p-6 flex flex-col flex-1">
-                        {/* Header */}
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={mcpIcons[templateKey]} alt="icon" className="w-9 h-9 rounded-md" />
-                            <div>
-                              <h3 className="text-xl font-bold text-white">{template.name}</h3>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(deployments[templateKey]?.status || 'deploy')}`}>
-                                {getStatusText(deployments[templateKey]?.status || 'deploy')}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Description */}
-                        <p className="mb-4 text-white" style={{ minHeight: '3rem' }}>{template.description}</p>
-
-                        {/* Content Area - This will grow to fill available space */}
-                        <div className="flex-1 flex flex-col">
-                          {/* Capabilities */}
-                          <div className="mb-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Wrench className="w-4 h-4" style={{ color: '#718392' }} />
-                              <span className="text-sm font-medium text-white">Available Tools:</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {mcpCapabilities[templateKey]?.map((capability) => (
-                                <span
-                                  key={capability}
-                                  className="px-2 py-1 text-xs rounded-md font-mono"
-                                  style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
-                                >
-                                  {capability}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* API Keys Required */}
-                          {template.required_keys.length > 0 && (
-                            <div className="mb-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Github className="w-4 h-4" style={{ color: '#718392' }} />
-                                <span className="text-sm font-medium text-white">Required API Keys:</span>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {template.required_keys.map((key) => (
-                                  <span
-                                    key={key}
-                                    className="px-2 py-1 text-xs rounded-md font-mono"
-                                    style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
-                                  >
-                                    {key}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Environment Variables Section */}
-                        {template.required_keys.length > 0 && (
-                          <div className="mb-4">
-                            <button
-                              onClick={() => toggleEnvVars(templateKey)}
-                              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
-                            >
-                              <Github className="w-4 h-4" />
-                              <span>Configure API Keys</span>
-                              <span className={`transform transition-transform ${showEnvVars[templateKey] ? 'rotate-180' : ''}`}>
-                                ▼
-                              </span>
-                            </button>
-                            
-                            {showEnvVars[templateKey] && (
-                              <div className="mt-3 p-4 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
-                                <div className="space-y-3">
-                                  {template.required_keys.map((keyName) => (
-                                    <div key={keyName}>
-                                      <label className="block text-sm font-medium text-white mb-1">
-                                        {keyName}
-                                      </label>
-                                      <input
-                                        type="password"
-                                        value={getEnvVarValue(templateKey, keyName)}
-                                        onChange={(e) => updateEnvVar(templateKey, keyName, e.target.value)}
-                                        placeholder={`Enter your ${keyName}`}
-                                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Action Area - Always at bottom */}
-                        <div className="mt-auto">
-                        {/* Deployment Status and Actions */}
-                        {deployments[templateKey] ? (
-                            <div>
-                              {/* URL Display */}
-                              <div className="rounded-md p-3 mb-4" style={{ background: '#000000', border: '1px solid #718392', minHeight: '4rem' }}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <code className="text-sm text-white font-mono flex-1 break-all">
-                                    {deployments[templateKey].url}
-                                  </code>
-                                  <button
-                                    onClick={() => copyToClipboard(deployments[templateKey].url)}
-                                    className={`flex-shrink-0 p-2 rounded-md transition-all border ${
-                                      copiedUrl === deployments[templateKey].url
-                                        ? 'bg-[rgba(46,160,67,0.2)] text-[#a7f3d0] border-[rgba(46,160,67,0.5)]'
-                                        : ''
-                                    }`}
-                                    style={copiedUrl === deployments[templateKey].url ? undefined : { background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
-                                    title="Copy MCP URL"
-                                  >
-                                    {copiedUrl === deployments[templateKey].url ? (
-                                      <CheckCircle className="w-5 h-5" />
-                                    ) : (
-                                      <Copy className="w-5 h-5" />
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Add to Poke Button */}
-                              <button
-                                onClick={() => addToPoke(deployments[templateKey].url)}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all"
-                                style={{ background: '#ffffff', color: '#203a54' }}
-                              >
-                                <ExternalLink className="w-5 h-5" />
-                                Add to Poke
-                              </button>
-                            </div>
-                          ) : userServices[templateKey] && !userServices[templateKey].available ? (
-                            /* Setup Required */
-                            <div>
-                              <div className="rounded-md p-3 mb-4" style={{ background: '#000000', border: '1px solid #718392' }}>
-                                <p className="text-sm text-yellow-300 mb-2">
-                                  {template.name} not set up in your Render account
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                  Click below to set it up with pre-filled settings
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => window.open(userServices[templateKey].setup_url, '_blank')}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all"
-                                style={{ background: '#f59e0b', color: '#ffffff' }}
-                              >
-                                <Wrench className="w-5 h-5" />
-                                Set Up in Render
-                              </button>
-                            </div>
-                          ) : (
-                            /* Deploy Button */
-                            <button
-                              onClick={() => deployMCP(templateKey, template)}
-                              disabled={deploying === templateKey}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all disabled:opacity-50"
-                              style={{ background: '#ffffff', color: '#203a54' }}
-                            >
-                              {deploying === templateKey ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
-                                  Deploying...
-                                </>
-                              ) : (
-                                <>
-                                  <Zap className="w-5 h-5" />
-                                  {template.required_keys.length > 0 ? 'Deploy MCP (API Keys Required)' : 'Deploy MCP'}
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <MCPCard
+                      key={index}
+                      template={template}
+                      templateKey={templateKey}
+                      deployment={deployments[templateKey]}
+                      userService={userServices[templateKey]}
+                      isDeploying={deploying === templateKey}
+                      onDeploy={deployMCP}
+                      onToggleEnvVars={toggleEnvVars}
+                      showEnvVars={showEnvVars[templateKey] || false}
+                      onUpdateEnvVar={updateEnvVar}
+                      getEnvVarValue={getEnvVarValue}
+                      copiedUrl={copiedUrl}
+                    />
                   );
                 })}
               </div>
@@ -840,7 +505,7 @@ export default function Home() {
             {/* Footer */}
             <footer className="mt-16 text-center" style={{ color: '#718392' }}>
               <p>MCP Marketplace • Deploy your own MCP servers</p>
-      </footer>
+            </footer>
           </div>
         )}
       </main>
