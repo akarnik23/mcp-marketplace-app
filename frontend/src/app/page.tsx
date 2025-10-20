@@ -18,6 +18,27 @@ interface User {
   avatar_url: string;
 }
 
+interface MCPService {
+  id: string;
+  name: string;
+  url: string;
+  status: string;
+}
+
+interface MCPTemplate {
+  name: string;
+  description: string;
+  required_keys: string[];
+  template: string;
+}
+
+interface UserServiceData {
+  available: boolean;
+  services: MCPService[];
+  template: MCPTemplate;
+  setup_url?: string;
+}
+
 const mcpIcons: { [key: string]: string } = {
   'news': '/news.png',
   'weather': '/weather.png',
@@ -43,7 +64,7 @@ export default function Home() {
   const [copiedUrl, setCopiedUrl] = useState<string>('');
   const [deployments, setDeployments] = useState<{[key: string]: {url: string, status: string}}>({});
   const [deploying, setDeploying] = useState<string | null>(null);
-  const [userServices, setUserServices] = useState<{[key: string]: {available: boolean, services: any[], template: any, setup_url?: string}}>({});
+  const [userServices, setUserServices] = useState<{[key: string]: UserServiceData}>({});
   const [renderApiKey, setRenderApiKey] = useState<string>('');
   const [detectingServices, setDetectingServices] = useState<boolean>(false);
   const [apiKeyError, setApiKeyError] = useState<string>('');
