@@ -17,7 +17,6 @@ interface MCPCardProps {
   showEnvVars: boolean;
   onUpdateEnvVar: (templateKey: string, keyName: string, value: string) => void;
   getEnvVarValue: (templateKey: string, keyName: string) => string;
-  copiedUrl: string;
 }
 
 export const MCPCard = ({
@@ -30,8 +29,7 @@ export const MCPCard = ({
   onToggleEnvVars,
   showEnvVars,
   onUpdateEnvVar,
-  getEnvVarValue,
-  copiedUrl
+  getEnvVarValue
 }: MCPCardProps) => {
   const [localCopiedUrl, setLocalCopiedUrl] = useState<string>('');
 
@@ -74,7 +72,7 @@ export const MCPCard = ({
     }
   };
 
-  const isCopied = localCopiedUrl === deployment?.url || copiedUrl === deployment?.url;
+  const isCopied = localCopiedUrl === deployment?.url;
 
   return (
     <div className="rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow flex flex-col" 

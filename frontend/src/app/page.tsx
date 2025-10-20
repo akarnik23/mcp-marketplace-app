@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { Zap, Wrench, ExternalLink, Github, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars } from './types';
-import { API_BASE_URL, ERROR_MESSAGES, MCP_ICONS } from './constants';
+import { ERROR_MESSAGES, MCP_ICONS } from './constants';
 import { useAuth } from './hooks/useAuth';
 import { useRenderApiKey } from './hooks/useRenderApiKey';
-import { apiRequest, handleApiError } from './utils/api';
+import { apiRequest } from './utils/api';
 import { MCPCard } from './components/MCPCard';
 
 export default function Home() {
@@ -25,7 +25,6 @@ export default function Home() {
   const [newApiKey, setNewApiKey] = useState<string>('');
   const [showEnvVars, setShowEnvVars] = useState<ShowEnvVars>({});
   const [envVars, setEnvVars] = useState<EnvVars>({});
-  const [copiedUrl, setCopiedUrl] = useState<string>('');
 
   useEffect(() => {
     fetchTemplates();
@@ -470,7 +469,6 @@ export default function Home() {
                       showEnvVars={showEnvVars[templateKey] || false}
                       onUpdateEnvVar={updateEnvVar}
                       getEnvVarValue={getEnvVarValue}
-                      copiedUrl={copiedUrl}
                     />
                   );
                 })}

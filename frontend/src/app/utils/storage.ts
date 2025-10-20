@@ -1,6 +1,11 @@
 // Utility functions for localStorage with client-side checks
 export const isClient = () => typeof window !== 'undefined';
 
+export const STORAGE_KEYS = {
+  ACCESS_TOKEN: 'access_token',
+  RENDER_API_KEY: 'render_api_key'
+} as const;
+
 export const getFromStorage = (key: string): string | null => {
   if (!isClient()) return null;
   try {
