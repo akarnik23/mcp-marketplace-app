@@ -189,7 +189,7 @@ export default function Settings() {
             
             <p className="text-gray-300 mb-6">
               Your Render API key is used to deploy and manage MCPs in your Render account. 
-              It's stored locally in your browser and never sent to our servers.
+              It&apos;s stored locally in your browser and never sent to our servers.
             </p>
 
             {renderApiKey ? (

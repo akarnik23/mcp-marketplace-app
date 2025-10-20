@@ -43,7 +43,7 @@ export default function Home() {
   const [copiedUrl, setCopiedUrl] = useState<string>('');
   const [deployments, setDeployments] = useState<{[key: string]: {url: string, status: string}}>({});
   const [deploying, setDeploying] = useState<string | null>(null);
-  const [userServices, setUserServices] = useState<{[key: string]: any}>({});
+  const [userServices, setUserServices] = useState<{[key: string]: {available: boolean, services: any[], template: any, setup_url?: string}}>({});
   const [renderApiKey, setRenderApiKey] = useState<string>('');
   const [detectingServices, setDetectingServices] = useState<boolean>(false);
   const [apiKeyError, setApiKeyError] = useState<string>('');
@@ -608,6 +608,7 @@ export default function Home() {
                         {/* Header */}
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center gap-3">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={mcpIcons[templateKey]} alt="icon" className="w-9 h-9 rounded-md" />
                             <div>
                               <h3 className="text-xl font-bold text-white">{template.name}</h3>
@@ -796,7 +797,7 @@ export default function Home() {
               <div className="space-y-4" style={{ color: '#718392' }}>
                 <div className="flex gap-3">
                   <span className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
-                  <p><strong className="text-white">Click "Deploy MCP"</strong> on any server card</p>
+                  <p><strong className="text-white">Click &quot;Deploy MCP&quot;</strong> on any server card</p>
                 </div>
                 <div className="flex gap-3">
                   <span className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
