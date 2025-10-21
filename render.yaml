@@ -18,13 +18,13 @@ services:
       - key: GITHUB_CLIENT_SECRET
         sync: false
       - key: GITHUB_REDIRECT_URI
-        value: https://mcp-marketplace-backend.onrender.com/auth/github/callback
+        value: https://mcp-marketplace-app-1wp6.onrender.com/auth/github/callback
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
       - key: FRONTEND_URL
-        value: https://mcp-marketplace.vercel.app
+        value: https://mcp-marketplace-app-bay.vercel.app
 
   # PostgreSQL Database
   - type: pserv
