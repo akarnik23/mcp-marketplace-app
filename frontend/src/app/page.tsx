@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Zap, Wrench, ExternalLink, Github, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars } from './types';
@@ -27,14 +27,6 @@ export default function Home() {
   const [envVars, setEnvVars] = useState<EnvVars>({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  useEffect(() => {
-    fetchTemplates();
-    if (user) {
-      loadDeployments();
-    } else {
-      setLastUpdated(null);
-    }
-  }, [user]);
 
   // Update timestamp display every minute
   useEffect(() => {
@@ -66,7 +58,7 @@ export default function Home() {
     }
   };
 
-  const loadDeployments = async () => {
+  const loadDeployments = useCallback(async () => {
     try {
       // First, ensure we have the Render API key stored in the backend
       if (renderApiKey) {
@@ -79,7 +71,7 @@ export default function Home() {
         const data = await response.json();
         // Convert deployments array to the format expected by the UI
         const deploymentMap: DeploymentStatuses = {};
-        data.deployments.forEach((deployment: any) => {
+        data.deployments.forEach((deployment: { template_id: string; deployment_url: string; status: string }) => {
           deploymentMap[deployment.template_id] = {
             url: deployment.deployment_url,
             status: deployment.status
@@ -91,7 +83,16 @@ export default function Home() {
     } catch (error) {
       console.error('Error loading deployments:', error);
     }
-  };
+  }, [renderApiKey]);
+
+  useEffect(() => {
+    fetchTemplates();
+    if (user) {
+      loadDeployments();
+    } else {
+      setLastUpdated(null);
+    }
+  }, [user, loadDeployments]);
 
   const detectUserServices = async (apiKey: string) => {
     if (detectingServices) return null;
