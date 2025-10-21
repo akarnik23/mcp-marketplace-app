@@ -50,7 +50,6 @@ class RenderClient:
             "clearCache": clear_cache
         }
         
-        print(f"DEBUG: Deploying to service {service_id} with payload: {payload}")
         
         try:
             response = requests.post(
@@ -58,11 +57,8 @@ class RenderClient:
                 headers=self.headers,
                 json=payload
             )
-            print(f"DEBUG: Deploy API response status: {response.status_code}")
-            print(f"DEBUG: Deploy API response: {response.text}")
             
             if response.status_code not in [200, 201, 202]:
-                print(f"DEBUG: Full error response: {response.text}")
                 raise Exception(f"Render Deploy API error {response.status_code}: {response.text}")
             
             # Don't call raise_for_status() since we already checked the status codes
@@ -77,9 +73,6 @@ class RenderClient:
                     "message": "Deployment request accepted"
                 }
         except requests.exceptions.RequestException as e:
-            print(f"DEBUG: Deploy API error: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                print(f"DEBUG: Error response: {e.response.text}")
             raise Exception(f"Failed to deploy to Render service: {e}")
     
     def get_service(self, service_id: str) -> Dict[str, Any]:
@@ -93,6 +86,68 @@ class RenderClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to get Render service: {e}")
+    
+    def get_service_status(self, service_id: str) -> Dict[str, Any]:
+        """Get just the service status"""
+        try:
+            service = self.get_service(service_id)
+            
+            # Check if service is suspended
+            suspended = service.get("suspended", "unknown")
+            
+            # Check if service has a URL (means it's live)
+            service_url = service.get("serviceDetails", {}).get("url")
+            
+            # Determine status based on available information
+            if suspended == "suspended":
+                # Service is suspended
+                return {"status": "offline"}
+            elif service_url:
+                # Service has a URL - test if it's actually responding
+                try:
+                    import requests
+                    response = requests.get(service_url, timeout=5)
+                    if response.status_code == 200:
+                        return {"status": "live"}
+                    else:
+                        return {"status": "sleeping"}
+                except Exception as e:
+                    return {"status": "sleeping"}
+            else:
+                # Service exists but no URL or other status
+                return {"status": "deploying"}
+                
+        except Exception as e:
+            print(f"Error getting service status: {e}")
+            return None
+
+    def get_latest_deployment_status(self, service_id: str) -> Dict[str, Any]:
+        """Get the status of the latest deployment for a service"""
+        try:
+            response = requests.get(
+                f"{self.base_url}/services/{service_id}/deploys",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            deployments = response.json()
+            
+            
+            if deployments and len(deployments) > 0:
+                latest_deployment = deployments[0]  # Most recent deployment
+                
+                # The status is nested inside a 'deploy' object
+                if 'deploy' in latest_deployment:
+                    deploy_status = latest_deployment['deploy'].get("status", "unknown")
+                else:
+                    deploy_status = latest_deployment.get("status", "unknown")
+                    
+                return {"status": deploy_status}
+            else:
+                return {"status": "unknown"}
+                
+        except Exception as e:
+            print(f"Error getting deployment status: {e}")
+            return None
     
     def delete_service(self, service_id: str) -> bool:
         """Delete a service"""
@@ -146,9 +201,6 @@ class RenderClient:
                         "value": str(value)
                     })
             
-            print(f"DEBUG: Updating service {service_id} with env vars: {list(env_vars.keys())}")
-            print(f"DEBUG: Total env vars to set: {len(env_vars_list)}")
-            print(f"DEBUG: Environment variables list: {env_vars_list}")
             
             # Prepare the JSON payload - try different formats
             # Format 1: With envVars wrapper
@@ -158,18 +210,14 @@ class RenderClient:
             # Format 3: Object with env vars as key-value pairs
             payload3 = {item["key"]: item["value"] for item in env_vars_list}
             
-            print(f"DEBUG: JSON payload format 1: {payload1}")
-            print(f"DEBUG: JSON payload format 2: {payload2}")
-            print(f"DEBUG: JSON payload format 3: {payload3}")
             
             # Validate JSON before sending
             import json
             for i, payload in enumerate([payload1, payload2, payload3], 1):
                 try:
                     json.dumps(payload)
-                    print(f"DEBUG: JSON payload format {i} is valid")
                 except (TypeError, ValueError) as e:
-                    print(f"DEBUG: JSON validation failed for format {i}: {e}")
+                    pass
             
             # Use format 2 (direct array) - we know this works!
             response = requests.put(
@@ -178,19 +226,13 @@ class RenderClient:
                 json=payload2
             )
             
-            print(f"DEBUG: Update env vars response status: {response.status_code}")
-            print(f"DEBUG: Update env vars response: {response.text}")
-            
             # Fallback to other formats if needed (shouldn't be necessary now)
             if response.status_code not in [200, 201, 202]:
-                print("DEBUG: Format 2 failed, trying format 3 (key-value pairs)")
                 response = requests.put(
                     f"{self.base_url}/services/{service_id}/env-vars",
                     headers=self.headers,
                     json=payload3
                 )
-                print(f"DEBUG: Format 3 response status: {response.status_code}")
-                print(f"DEBUG: Format 3 response: {response.text}")
             
             if response.status_code not in [200, 201, 202]:
                 raise Exception(f"Render Update Env Vars API error {response.status_code}: {response.text}")
@@ -198,7 +240,6 @@ class RenderClient:
             return response.json() if response.text.strip() else {"status": "updated"}
             
         except requests.exceptions.RequestException as e:
-            print(f"DEBUG: Update env vars error: {e}")
             raise Exception(f"Failed to update service environment variables: {e}")
     
     def restart_service(self, service_id: str) -> Dict[str, Any]:
@@ -212,15 +253,12 @@ class RenderClient:
             Restart response
         """
         try:
-            print(f"DEBUG: Restarting service {service_id}")
             
             response = requests.post(
                 f"{self.base_url}/services/{service_id}/restart",
                 headers=self.headers
             )
             
-            print(f"DEBUG: Restart response status: {response.status_code}")
-            print(f"DEBUG: Restart response: {response.text}")
             
             if response.status_code not in [200, 201, 202]:
                 raise Exception(f"Render Restart API error {response.status_code}: {response.text}")
@@ -228,7 +266,6 @@ class RenderClient:
             return response.json() if response.text.strip() else {"status": "restarted"}
             
         except requests.exceptions.RequestException as e:
-            print(f"DEBUG: Restart error: {e}")
             raise Exception(f"Failed to restart service: {e}")
 
 # Map MCP types to their existing Render service IDs
@@ -241,22 +278,3 @@ MCP_SERVICE_IDS = {
     "hackernews": "srv-d3mrgn7diees739s5d9g",
 }
 
-# MCP Template repositories
-MCP_REPOS = {
-    "news": "https://github.com/akarnik/pokeMCP.git",
-    "weather": "https://github.com/akarnik/pokeMCP.git", 
-    "github": "https://github.com/akarnik/pokeMCP.git",
-    "reddit": "https://github.com/akarnik/pokeMCP.git",
-    "spotify": "https://github.com/akarnik/pokeMCP.git",
-    "hackernews": "https://github.com/akarnik/pokeMCP.git"
-}
-
-# Subdirectories for each MCP in the monorepo
-MCP_SUBDIRS = {
-    "news": "mcp-news",
-    "weather": "mcp-weather", 
-    "github": "mcp-github",
-    "reddit": "mcp-reddit",
-    "spotify": "mcp-spotify",
-    "hackernews": "mcp-hackernews"
-}

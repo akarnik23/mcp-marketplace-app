@@ -11,23 +11,31 @@ function AuthCallbackContent() {
   useEffect(() => {
     const handleCallback = async () => {
       const code = searchParams.get('code');
+      console.log('Callback code:', code);
       
       if (!code) {
+        console.log('No code found, setting error status');
         setStatus('error');
         return;
       }
 
       try {
+        console.log('Making callback request...');
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/auth/github/callback?code=${code}`);
+        console.log('Response status:', response.status);
         
         if (response.ok) {
           const data = await response.json();
-          localStorage.setItem('access_token', data.access_token);
+          console.log('Auth successful, storing token');
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('access_token', data.access_token);
+          }
           setStatus('success');
           setTimeout(() => {
             router.push('/');
           }, 2000);
         } else {
+          console.log('Auth failed, response not ok');
           setStatus('error');
         }
       } catch (error) {

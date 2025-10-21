@@ -124,6 +124,8 @@ export default function Settings() {
         return 'bg-emerald-900/30 text-emerald-300 border border-emerald-700';
       case 'deploying':
         return 'bg-yellow-900/30 text-yellow-300 border border-yellow-700';
+      case 'sleeping':
+        return 'bg-blue-900/30 text-blue-300 border border-blue-700';
       case 'offline':
         return 'bg-red-900/30 text-red-300 border border-red-700';
       default:
@@ -137,10 +139,12 @@ export default function Settings() {
         return 'Live';
       case 'deploying':
         return 'Deploying';
+      case 'sleeping':
+        return 'Sleeping';
       case 'offline':
         return 'Offline';
       default:
-        return 'Unknown';
+        return 'Deploy';
     }
   };
 

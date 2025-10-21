@@ -25,10 +25,28 @@ export default function Home() {
   const [newApiKey, setNewApiKey] = useState<string>('');
   const [showEnvVars, setShowEnvVars] = useState<ShowEnvVars>({});
   const [envVars, setEnvVars] = useState<EnvVars>({});
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+    if (user) {
+      loadDeployments();
+    } else {
+      setLastUpdated(null);
+    }
+  }, [user]);
+
+  // Update timestamp display every minute
+  useEffect(() => {
+    if (!lastUpdated) return;
+    
+    const interval = setInterval(() => {
+      // Force re-render to update the "time ago" display
+      setLastUpdated(new Date(lastUpdated.getTime()));
+    }, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
 
   const fetchTemplates = async () => {
     try {
@@ -45,6 +63,33 @@ export default function Home() {
       setTemplates([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDeployments = async () => {
+    try {
+      // First, ensure we have the Render API key stored in the backend
+      if (renderApiKey) {
+        await detectUserServices(renderApiKey);
+      }
+      
+      const response = await apiRequest('/mcps/deployed');
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Convert deployments array to the format expected by the UI
+        const deploymentMap: DeploymentStatuses = {};
+        data.deployments.forEach((deployment: any) => {
+          deploymentMap[deployment.template_id] = {
+            url: deployment.deployment_url,
+            status: deployment.status
+          };
+        });
+        setDeployments(deploymentMap);
+        setLastUpdated(new Date());
+      }
+    } catch (error) {
+      console.error('Error loading deployments:', error);
     }
   };
 
@@ -128,6 +173,21 @@ export default function Home() {
     return envVars[templateKey]?.[keyName] || '';
   };
 
+  const getTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return 'just now';
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    } else {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+  };
+
   const deployMCP = async (templateKey: string, template: MCPTemplate) => {
     if (!user) return;
     
@@ -182,7 +242,7 @@ export default function Home() {
             available: false,
             services: [],
             template: template,
-            setup_url: `https://dashboard.render.com/new/web-service?repo=https://github.com/akarnik23/mcp-${templateKey}&branch=main&rootDir=&name=${templateKey}-mcp`
+            setup_url: `https://render.com/deploy?repo=https://github.com/akarnik23/mcp-${templateKey}`
           }
         }));
         setDeploying(null);
@@ -221,25 +281,27 @@ export default function Home() {
       
       const data = await response.json();
       
+      // Don't set status to 'live' here - let the backend determine the real status
+      // The status will be updated when loadDeployments() is called
       setDeployments(prev => ({
         ...prev,
         [templateKey]: {
           url: data.deployment_url || service.url,
-          status: 'live'
+          status: 'deploying'  // Keep as deploying until backend confirms it's live
         }
       }));
       
+      // Load the actual deployment status from backend
+      await loadDeployments();
+      
     } catch (error) {
       console.error(`Error deploying ${templateKey}:`, error);
-      if (userServices[templateKey]?.services?.[0]?.url) {
-        setDeployments(prev => ({
-          ...prev,
-          [templateKey]: {
-            url: userServices[templateKey].services[0].url,
-            status: 'live'
-          }
-        }));
-      }
+      // Don't set status to 'live' on error - set to 'offline' or remove deployment
+      setDeployments(prev => {
+        const newDeployments = { ...prev };
+        delete newDeployments[templateKey];
+        return newDeployments;
+      });
     } finally {
       setDeploying(null);
     }
@@ -288,7 +350,7 @@ export default function Home() {
                   </Link>
                   <button
                     onClick={logout}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
                     style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
                   >
                     Logout
@@ -297,7 +359,7 @@ export default function Home() {
               ) : (
                 <button
                   onClick={handleGitHubAuth}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all cursor-pointer"
                   style={{ background: '#ffffff', color: '#203a54' }}
                 >
                   <Github className="w-4 h-4" />
@@ -319,7 +381,7 @@ export default function Home() {
             </div>
             <button
               onClick={clearApiKeyError}
-              className="text-red-300 hover:text-red-200 text-sm"
+              className="text-red-300 hover:text-red-200 text-sm cursor-pointer"
             >
               ✕
             </button>
@@ -338,13 +400,13 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => setShowApiKeyInput(true)}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded cursor-pointer"
                     >
                       Change Key
                     </button>
                     <button
                       onClick={handleClearApiKey}
-                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded"
+                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded cursor-pointer"
                     >
                       Clear Key
                     </button>
@@ -352,7 +414,7 @@ export default function Home() {
                 ) : (
                   <button
                     onClick={() => setShowApiKeyInput(true)}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded"
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded cursor-pointer"
                   >
                     Add API Key
                   </button>
@@ -381,7 +443,7 @@ export default function Home() {
                 <button
                   onClick={handleUpdateApiKey}
                   disabled={!newApiKey.trim()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded cursor-pointer"
                 >
                   Update
                 </button>
@@ -390,7 +452,7 @@ export default function Home() {
                     setShowApiKeyInput(false);
                     setNewApiKey('');
                   }}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded"
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -430,7 +492,7 @@ export default function Home() {
             </div>
             <button
               onClick={handleGitHubAuth}
-              className="px-8 py-3 rounded-lg text-lg font-semibold transition-all"
+              className="px-8 py-3 rounded-lg text-lg font-semibold transition-all cursor-pointer"
               style={{ background: '#ffffff', color: '#203a54' }}
             >
               Get Started with GitHub
@@ -441,9 +503,27 @@ export default function Home() {
           <div>
             {/* MCP Servers Grid */}
             <section className="mb-16">
-              <div className="mb-8">
+              <div className="mb-8 flex items-center justify-between">
+                <div>
                 <h2 className="text-2xl font-bold text-white mb-2">Available MCP Servers</h2>
                 <p style={{ color: '#718392' }}>Deploy MCPs to your Render account and connect to Poke</p>
+                </div>
+                {user && (
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      onClick={loadDeployments}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
+                    >
+                      🔄 Refresh Status
+                    </button>
+                    {lastUpdated && (
+                      <span className="text-xs" style={{ color: '#718392' }}>
+                        Last updated: {getTimeAgo(lastUpdated)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -503,7 +583,7 @@ export default function Home() {
             {/* Footer */}
             <footer className="mt-16 text-center" style={{ color: '#718392' }}>
               <p>MCP Marketplace • Deploy your own MCP servers</p>
-            </footer>
+      </footer>
           </div>
         )}
       </main>

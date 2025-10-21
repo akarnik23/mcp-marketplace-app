@@ -4,10 +4,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import httpx
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 import json
 from dotenv import load_dotenv
-from render_client import RenderClient, MCP_REPOS, MCP_SUBDIRS, MCP_SERVICE_IDS
+from render_client import RenderClient, MCP_SERVICE_IDS
 from database import get_db, User, Deployment, APIKey, MCPTemplate, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
 from auth import create_access_token, verify_token
@@ -219,6 +219,28 @@ async def detect_user_services(
         raise HTTPException(status_code=400, detail="Please provide a valid Render API key")
     
     try:
+        # Store the Render API key in the database for future use
+        existing_key = db.query(APIKey).filter(
+            APIKey.user_id == user.id,
+            APIKey.key_name == "render_api_key"
+        ).first()
+        
+        if not existing_key:
+            # Store the API key encrypted
+            encrypted_key = encrypt_value(render_api_key)
+            api_key = APIKey(
+                user_id=user.id,
+                key_name="render_api_key",
+                key_type="render_api",
+                encrypted_value=encrypted_key
+            )
+            db.add(api_key)
+            db.commit()
+        else:
+            # Update existing key
+            existing_key.encrypted_value = encrypt_value(render_api_key)
+            db.commit()
+        
         # Create Render client with user's API key
         render_client = RenderClient(render_api_key)
         
@@ -227,10 +249,6 @@ async def detect_user_services(
         # The API returns an array of objects with 'service' property
         user_services = [item.get("service", {}) for item in services_response if isinstance(services_response, list)]
         
-        print(f"DEBUG: Found {len(user_services)} services in user's Render account")
-        for service in user_services:
-            service_url = service.get('serviceDetails', {}).get('url', 'No URL')
-            print(f"DEBUG: Service: {service.get('name')} - {service_url}")
         
         # Detect which MCPs are available
         detected_mcps = {}
@@ -258,7 +276,6 @@ async def detect_user_services(
                 matches = any(service_name == expected_name for expected_name in expected_names)
                 
                 if matches:
-                    print(f"DEBUG: Found matching service for {template_id}: {service.get('name')}")
                     mcp_services.append({
                         "id": service.get("id"),
                         "name": service.get("name"),
@@ -273,16 +290,14 @@ async def detect_user_services(
                     "services": mcp_services,
                     "template": template_info
                 }
-                print(f"DEBUG: {template_id} is available with {len(mcp_services)} services")
             else:
                 # User doesn't have this MCP set up
                 detected_mcps[template_id] = {
                     "available": False,
                     "services": [],
                     "template": template_info,
-                    "setup_url": f"https://dashboard.render.com/new/web-service?repo=https://github.com/akarnik23/mcp-{template_id}&branch=main&rootDir=&name={template_id}-mcp"
+                    "setup_url": f"https://render.com/deploy?repo=https://github.com/akarnik23/mcp-{template_id}"
                 }
-                print(f"DEBUG: {template_id} is NOT available")
         
         return {
             "user_id": str(user.id),
@@ -330,7 +345,6 @@ async def deploy_mcp(
         # Use provided API key (no fallback - user must provide their own)
         api_key_to_use = request.render_api_key
         
-        print(f"DEBUG: Using API key: {api_key_to_use[:10]}...")
         
         if not api_key_to_use or api_key_to_use in ["your_render_api_key", "test"]:
             raise HTTPException(status_code=400, detail="Please provide a valid Render API key")
@@ -349,17 +363,15 @@ async def deploy_mcp(
         # Update environment variables if provided
         if request.env_vars:
             try:
-                print(f"DEBUG: Updating environment variables for service {service_id}")
                 render_client.update_service_env_vars(service_id, request.env_vars)
                 
                 # Restart the service to pick up new environment variables
-                print(f"DEBUG: Restarting service {service_id} to apply environment variables")
                 render_client.restart_service(service_id)
                 
             except Exception as e:
-                print(f"DEBUG: Failed to update environment variables: {e}")
                 # Don't fail the deployment if env var update fails
                 # The deployment will still work, just without the custom env vars
+                pass
         
         # Get the actual service URL from Render
         try:
@@ -437,6 +449,29 @@ async def get_deployed_mcps(
     
     deployment_list = []
     for deployment in deployments:
+        # Always check the actual service status by testing the URL
+        if deployment.status in ["deploying", "build_in_progress", "live", "sleeping"]:
+            try:
+                # Test the actual service URL to see if it's responding
+                import requests
+                response = requests.get(deployment.deployment_url, timeout=5)
+                
+                # Any response means the service is awake and running
+                if response.status_code in [200, 404, 405, 500, 502, 503]:
+                    if deployment.status != "live":
+                        deployment.status = "live"
+                        db.commit()
+                else:
+                    # Unexpected status code - still consider it live if we got a response
+                    if deployment.status != "live":
+                        deployment.status = "live"
+                        db.commit()
+                        
+            except Exception as e:
+                if deployment.status != "sleeping":
+                    deployment.status = "sleeping"
+                    db.commit()
+        
         deployment_list.append({
             "id": str(deployment.id),
             "template_id": deployment.template_id,

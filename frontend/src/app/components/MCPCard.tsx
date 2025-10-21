@@ -52,6 +52,8 @@ export const MCPCard = ({
         return 'bg-emerald-900/30 text-emerald-300 border border-emerald-700';
       case 'deploying':
         return 'bg-yellow-900/30 text-yellow-300 border border-yellow-700';
+      case 'sleeping':
+        return 'bg-blue-900/30 text-blue-300 border border-blue-700';
       case 'offline':
         return 'bg-red-900/30 text-red-300 border border-red-700';
       default:
@@ -65,6 +67,8 @@ export const MCPCard = ({
         return 'Live';
       case 'deploying':
         return 'Deploying';
+      case 'sleeping':
+        return 'Sleeping';
       case 'offline':
         return 'Offline';
       default:
@@ -143,7 +147,7 @@ export const MCPCard = ({
           <div className="mb-4">
             <button
               onClick={() => onToggleEnvVars(templateKey)}
-              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
+              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors cursor-pointer"
             >
               <Github className="w-4 h-4" />
               <span>Configure API Keys</span>
@@ -187,7 +191,7 @@ export const MCPCard = ({
                   </code>
                   <button
                     onClick={() => handleCopy(deployment.url)}
-                    className={`flex-shrink-0 p-2 rounded-md transition-all border ${
+                    className={`flex-shrink-0 p-2 rounded-md transition-all border cursor-pointer ${
                       isCopied
                         ? 'bg-[rgba(46,160,67,0.2)] text-[#a7f3d0] border-[rgba(46,160,67,0.5)]'
                         : ''
@@ -207,7 +211,7 @@ export const MCPCard = ({
               {/* Add to Poke Button */}
               <button
                 onClick={() => handleAddToPoke(deployment.url)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all cursor-pointer"
                 style={{ background: '#ffffff', color: '#203a54' }}
               >
                 <ExternalLink className="w-5 h-5" />
@@ -227,7 +231,7 @@ export const MCPCard = ({
               </div>
               <button
                 onClick={() => openExternalLink(userService.setup_url || '')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all cursor-pointer"
                 style={{ background: '#f59e0b', color: '#ffffff' }}
               >
                 <Wrench className="w-5 h-5" />
@@ -239,7 +243,7 @@ export const MCPCard = ({
             <button
               onClick={() => onDeploy(templateKey, template)}
               disabled={isDeploying}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
               style={{ background: '#ffffff', color: '#203a54' }}
             >
               {isDeploying ? (
