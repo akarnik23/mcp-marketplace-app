@@ -284,17 +284,35 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Check actual service status for each service
+                # Check actual service status for each service by testing HTTP endpoints
                 for service in mcp_services:
                     try:
                         import requests
-                        response = requests.get(service["url"], timeout=5)
-                        if response.status_code in [200, 404, 405, 500, 502, 503]:
+                        # Use shorter timeout to avoid waking sleeping services
+                        response = requests.get(service["url"], timeout=2)
+                        
+                        # Check response content for sleeping indicators
+                        response_text = response.text.lower()
+                        if "sleeping" in response_text:
+                            service["status"] = "sleeping"
+                        elif "waking up" in response_text:
+                            service["status"] = "sleeping"  # Actually waking up
+                        elif response.status_code in [200, 404, 405]:
+                            # 200 = working, 404/405 = awake but wrong endpoint
                             service["status"] = "live"
+                        elif response.status_code in [502, 503]:
+                            # 502/503 could mean sleeping OR service awake but external API down
+                            # If we get a response (even error), service is likely awake
+                            service["status"] = "live"  # Service is awake but may have external API issues
                         else:
                             service["status"] = "sleeping"
-                    except:
-                        service["status"] = "sleeping"
+                            
+                    except requests.exceptions.Timeout:
+                        service["status"] = "sleeping"  # Timeout means sleeping
+                    except requests.exceptions.ConnectionError:
+                        service["status"] = "sleeping"  # Connection error means sleeping
+                    except Exception:
+                        service["status"] = "sleeping"  # Any other error means sleeping
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {
