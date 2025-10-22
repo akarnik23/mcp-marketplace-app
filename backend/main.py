@@ -165,7 +165,7 @@ POKE_RELEVANT_CRITERIA = {
 
 async def fetch_smithery_servers():
     """Fetch MCP servers from Smithery Registry API with caching"""
-    global SMITHERY_CACHE_TIMESTAMP
+    global SMITHERY_CACHE_TIMESTAMP, SMITHERY_MCPS
     
     # Check if we have valid cached data
     import time
@@ -370,6 +370,7 @@ async def fetch_smithery_servers():
             }
         
         # Update cache
+        SMITHERY_MCPS = smithery_mcps
         SMITHERY_CACHE_TIMESTAMP = current_time
         return smithery_mcps
         
