@@ -127,6 +127,8 @@ MCP_TEMPLATES = {
 # Smithery MCP Servers - Fetched from Smithery Registry API
 # This will be populated dynamically from the Smithery API
 SMITHERY_MCPS = {}
+SMITHERY_CACHE_TIMESTAMP = None
+SMITHERY_CACHE_DURATION = 3600  # 1 hour cache
 
 # Poke-relevant criteria for curating high-quality MCPs
 POKE_RELEVANT_CRITERIA = {
@@ -162,7 +164,18 @@ POKE_RELEVANT_CRITERIA = {
 }
 
 async def fetch_smithery_servers():
-    """Fetch MCP servers from Smithery Registry API"""
+    """Fetch MCP servers from Smithery Registry API with caching"""
+    global SMITHERY_CACHE_TIMESTAMP
+    
+    # Check if we have valid cached data
+    import time
+    current_time = time.time()
+    if (SMITHERY_CACHE_TIMESTAMP and 
+        current_time - SMITHERY_CACHE_TIMESTAMP < SMITHERY_CACHE_DURATION and 
+        SMITHERY_MCPS):
+        print("Using cached Smithery servers")
+        return SMITHERY_MCPS
+    
     try:
         # Try to get all servers first, then filter
         all_servers = []
@@ -271,8 +284,8 @@ async def fetch_smithery_servers():
         scored_servers = [(server, score_server(server)) for server in all_servers]
         scored_servers.sort(key=lambda x: x[1], reverse=True)
         
-        # Take top 15-20 servers
-        top_servers = [server for server, score in scored_servers[:20] if score > 0]
+        # Take top servers with meaningful scores (filter out low-quality results)
+        top_servers = [server for server, score in scored_servers[:15] if score >= 10]
         print(f"Selected {len(top_servers)} top servers from {len(all_servers)} total")
         
         # Convert to our format
@@ -316,9 +329,17 @@ async def fetch_smithery_servers():
                 mcp_url = homepage_url
                 print(f"Could not parse homepage URL: {homepage_url}")
             
+            # Clean and standardize description
+            description = server["description"]
+            # Remove excessive whitespace and newlines
+            description = " ".join(description.split())
+            # Truncate to reasonable length (200 chars)
+            if len(description) > 200:
+                description = description[:197] + "..."
+            
             smithery_mcps[key] = {
                 "name": server["displayName"],
-                "description": server["description"],
+                "description": description,
                 "smithery_url": mcp_url,
                 "required_keys": required_keys,
                 "category": category,
@@ -326,6 +347,8 @@ async def fetch_smithery_servers():
                 "use_count": server.get("useCount", 0)
             }
         
+        # Update cache
+        SMITHERY_CACHE_TIMESTAMP = current_time
         return smithery_mcps
         
     except Exception as e:
