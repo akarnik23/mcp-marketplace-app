@@ -23,7 +23,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Development
-        os.getenv("FRONTEND_URL", "https://your-app.vercel.app"),  # Production
+        "https://mcp-marketplace-app-bay.vercel.app",  # Production frontend
+        "https://mcp-marketplace-app-1wp6.onrender.com",  # Production backend (for testing)
+        os.getenv("FRONTEND_URL", "https://mcp-marketplace-app-bay.vercel.app"),  # From env
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -126,6 +128,39 @@ MCP_TEMPLATES = {
 # This will be populated dynamically from the Smithery API
 SMITHERY_MCPS = {}
 
+# Poke-relevant criteria for curating high-quality MCPs
+POKE_RELEVANT_CRITERIA = {
+    "productivity": {
+        "notion": ["notion", "notes", "documentation"],
+        "linear": ["linear", "project management"],
+        "calendar": ["calendar", "schedule", "events"],
+        "google": ["google", "drive", "docs"]
+    },
+    "communication": {
+        "gmail": ["gmail", "email", "mail"],
+        "slack": ["slack", "chat", "messaging"],
+        "discord": ["discord", "voice", "gaming"],
+        "twitter": ["twitter", "x", "social"]
+    },
+    "development": {
+        "github": ["github", "git", "repository", "repo"],
+        "jira": ["jira", "issues", "tickets"],
+        "figma": ["figma", "design", "prototype"]
+    },
+    "search": {
+        "exa": ["exa", "search", "web search"],
+        "brave": ["brave", "search", "browser"],
+        "deepwiki": ["deepwiki", "wiki", "documentation"],
+        "search": ["search", "find", "lookup", "query"]
+    },
+    "database": {
+        "supabase": ["supabase", "database", "sql"]
+    },
+    "memory": {
+        "memory": ["memory", "remember", "context", "storage"]
+    }
+}
+
 async def fetch_smithery_servers():
     """Fetch MCP servers from Smithery Registry API"""
     try:
@@ -141,11 +176,11 @@ async def fetch_smithery_servers():
                 raise Exception("Smithery API key not configured")
             
             async with httpx.AsyncClient() as client:
-                # First try to get all servers without specific search
+                # Get a large batch of servers for our own semantic search
                 response = await client.get(
                     "https://registry.smithery.ai/servers",
                     params={
-                        "pageSize": 20
+                        "pageSize": 50  # Get more servers for our own filtering
                     },
                     headers={
                         "Authorization": f"Bearer {smithery_api_key}"
@@ -166,18 +201,16 @@ async def fetch_smithery_servers():
         except Exception as e:
             print(f"Failed to fetch from Smithery API: {e}")
         
-        # If we didn't get many results, try some specific searches
-        if len(all_servers) < 5:
-            search_queries = ["notion", "gmail", "slack", "github", "calendar"]
-            
-            for query in search_queries:
+        # If we didn't get enough results, try a few more pages
+        if len(all_servers) < 30:
+            for page in range(2, 4):  # Get pages 2 and 3
                 try:
                     async with httpx.AsyncClient() as client:
                         response = await client.get(
                             "https://registry.smithery.ai/servers",
                             params={
-                                "q": query,
-                                "pageSize": 5
+                                "page": page,
+                                "pageSize": 25
                             },
                             headers={
                                 "Authorization": f"Bearer {smithery_api_key}"
@@ -188,48 +221,105 @@ async def fetch_smithery_servers():
                         if response.status_code == 200:
                             data = response.json()
                             servers = data.get("servers", [])
-                            print(f"Found {len(servers)} servers for query '{query}'")
+                            print(f"Found {len(servers)} servers from page {page}")
                             all_servers.extend(servers)
                 except Exception as e:
-                    print(f"Failed to fetch Smithery servers for query '{query}': {e}")
+                    print(f"Failed to fetch page {page}: {e}")
                     continue
+        
+        # Apply our own semantic filtering to find the best servers
+        def score_server(server):
+            """Score a server based on how relevant it is for our marketplace"""
+            name = server.get("displayName", "").lower()
+            description = server.get("description", "").lower()
+            qualified_name = server.get("qualifiedName", "").lower()
+            use_count = server.get("useCount", 0)
+            verified = server.get("verified", False)
+            
+            score = 0
+            
+            # Use global POKE_RELEVANT_CRITERIA for scoring
+            
+            # Score based on Poke-relevant criteria (exact matches get higher scores)
+            for category, mcp_terms in POKE_RELEVANT_CRITERIA.items():
+                for mcp_name, terms in mcp_terms.items():
+                    for term in terms:
+                        if term in name:
+                            score += 15  # Name matches are most important
+                        elif term in description:
+                            score += 10  # Description matches are important
+                        elif term in qualified_name:
+                            score += 8   # Qualified name matches are good
+            
+            # Boost for verified and popular servers
+            if verified:
+                score += 5
+            if use_count > 1000:
+                score += 3
+            elif use_count > 100:
+                score += 1
+            
+            # Boost for productivity/communication tools
+            productivity_terms = ["email", "task", "project", "team", "collaboration", "workflow"]
+            for term in productivity_terms:
+                if term in description:
+                    score += 2
+            
+            return score
+        
+        # Sort servers by our scoring and take the top ones
+        scored_servers = [(server, score_server(server)) for server in all_servers]
+        scored_servers.sort(key=lambda x: x[1], reverse=True)
+        
+        # Take top 15-20 servers
+        top_servers = [server for server, score in scored_servers[:20] if score > 0]
+        print(f"Selected {len(top_servers)} top servers from {len(all_servers)} total")
         
         # Convert to our format
         smithery_mcps = {}
-        for server in all_servers:
+        for server in top_servers:
             # Extract key name from qualified name (e.g., "smithery/notion" -> "notion")
             key = server["qualifiedName"].split("/")[-1]
             
-            # Determine required keys based on server name
-            required_keys = []
-            if "notion" in key.lower():
-                required_keys = ["notion_token"]
-            elif "gmail" in key.lower():
-                required_keys = ["gmail_credentials"]
-            elif "slack" in key.lower():
-                required_keys = ["slack_token"]
-            elif "google" in key.lower() or "drive" in key.lower() or "calendar" in key.lower():
-                required_keys = ["google_credentials"]
-            elif "jira" in key.lower():
-                required_keys = ["jira_token", "jira_domain"]
-            elif "github" in key.lower():
-                required_keys = ["github_token"]
-            elif "twitter" in key.lower():
-                required_keys = ["twitter_credentials"]
-            elif "discord" in key.lower():
-                required_keys = ["discord_token"]
+            # Let Smithery handle required keys - we don't need to guess
+            required_keys = []  # Smithery will prompt for keys during OAuth
             
-            # Determine category
-            category = "productivity"
-            if any(comm in key.lower() for comm in ["gmail", "slack", "discord", "twitter"]):
-                category = "communication"
-            elif any(dev in key.lower() for dev in ["github", "jira", "git"]):
-                category = "development"
+            # Smart category detection based on Poke-relevant criteria
+            description = server.get("description", "").lower()
+            name = server.get("displayName", "").lower()
+            qualified_name = server.get("qualifiedName", "").lower()
+            
+            # Combine all text for better detection
+            all_text = f"{name} {description} {qualified_name}"
+            category = "productivity"  # default
+            
+            # Use the same POKE_RELEVANT_CRITERIA for consistent categorization
+            for cat_name, mcp_terms in POKE_RELEVANT_CRITERIA.items():
+                for mcp_name, terms in mcp_terms.items():
+                    if any(term in all_text for term in terms):
+                        category = cat_name
+                        break
+                if category != "productivity":  # Found a match, stop checking
+                    break
+            
+            # Construct the proper MCP server URL
+            # Convert from homepage URL (https://smithery.ai/server/username/repo) 
+            # to MCP server URL (https://server.smithery.ai/username/repo/mcp)
+            homepage_url = server["homepage"]
+            if "smithery.ai/server/" in homepage_url:
+                # Extract the server path and construct MCP URL
+                server_path = homepage_url.split("smithery.ai/server/")[1]
+                mcp_url = f"https://server.smithery.ai/{server_path}/mcp"
+                print(f"Converted {homepage_url} -> {mcp_url}")
+            else:
+                # Fallback to homepage if we can't parse it
+                mcp_url = homepage_url
+                print(f"Could not parse homepage URL: {homepage_url}")
             
             smithery_mcps[key] = {
                 "name": server["displayName"],
                 "description": server["description"],
-                "smithery_url": server["homepage"],
+                "smithery_url": mcp_url,
                 "required_keys": required_keys,
                 "category": category,
                 "verified": server.get("verified", False),
@@ -243,40 +333,40 @@ async def fetch_smithery_servers():
         # Return some fallback servers if API fails
         return {
             "notion": {
-                "name": "Notion MCP",
-                "description": "Access and manage Notion pages, databases, and content",
-                "smithery_url": "https://smithery.ai/server/smithery/notion",
+                "name": "Notion",
+                "description": "Search across your Notion workspace and connected sources to quickly find pages, databases, and users. View full page and database details for deeper context. Create and update pages, manage databases, move or duplicate content, and add comments to keep work organized.",
+                "smithery_url": "https://server.smithery.ai/notion/mcp",
                 "required_keys": ["notion_token"],
                 "category": "productivity",
                 "verified": True,
-                "use_count": 0
+                "use_count": 26256
             },
-            "gmail": {
-                "name": "Gmail MCP",
-                "description": "Read and manage Gmail messages and labels", 
-                "smithery_url": "https://smithery.ai/server/smithery/gmail",
-                "required_keys": ["gmail_credentials"],
-                "category": "communication",
+            "exa": {
+                "name": "Exa Search",
+                "description": "Fast, intelligent web search and web crawling. New mcp tool: Exa-code is a context tool for coding agents. It provides agents with fresh information about libraries, APIs, and SDKs with the purpose of reducing hallucinations.",
+                "smithery_url": "https://server.smithery.ai/exa/mcp",
+                "required_keys": ["exa_api_key"],
+                "category": "productivity",
                 "verified": True,
-                "use_count": 0
+                "use_count": 386927
             },
-            "slack": {
-                "name": "Slack MCP",
-                "description": "Send messages and interact with Slack workspaces",
-                "smithery_url": "https://smithery.ai/server/smithery/slack",
-                "required_keys": ["slack_token"],
-                "category": "communication",
-                "verified": True,
-                "use_count": 0
-            },
-            "github": {
-                "name": "GitHub MCP",
-                "description": "Access and manage GitHub repositories and issues",
-                "smithery_url": "https://smithery.ai/server/smithery/github",
-                "required_keys": ["github_token"],
+            "supabase": {
+                "name": "Supabase",
+                "description": "Search the Supabase docs for up-to-date guidance and troubleshoot errors quickly. Manage organizations, projects, databases, and Edge Functions, including migrations, SQL, logs, advisors, keys, and type generation, in one flow.",
+                "smithery_url": "https://server.smithery.ai/supabase/mcp",
+                "required_keys": ["supabase_url", "supabase_key"],
                 "category": "development",
                 "verified": True,
-                "use_count": 0
+                "use_count": 34723
+            },
+            "brave": {
+                "name": "Brave Search",
+                "description": "Visit https://brave.com/search/api/ for a free API key. Search the web, local businesses, images, videos, and news with rich, structured results. Refine results by country, language, freshness, and SafeSearch to pinpoint what you need.",
+                "smithery_url": "https://server.smithery.ai/brave/mcp",
+                "required_keys": ["brave_api_key"],
+                "category": "productivity",
+                "verified": True,
+                "use_count": 13337
             }
         }
 
