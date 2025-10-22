@@ -58,42 +58,6 @@ export default function Home() {
     }
   };
 
-  const loadDeployments = useCallback(async () => {
-    try {
-      // First, ensure we have the Render API key stored in the backend
-      if (renderApiKey) {
-        await detectUserServices(renderApiKey);
-      }
-      
-      const response = await apiRequest('/mcps/deployed');
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Convert deployments array to the format expected by the UI
-        const deploymentMap: DeploymentStatuses = {};
-        data.deployments.forEach((deployment: { template_id: string; deployment_url: string; status: string }) => {
-          deploymentMap[deployment.template_id] = {
-            url: deployment.deployment_url,
-            status: deployment.status
-          };
-        });
-        setDeployments(deploymentMap);
-        setLastUpdated(new Date());
-      }
-    } catch (error) {
-      console.error('Error loading deployments:', error);
-    }
-  }, [renderApiKey]);
-
-  useEffect(() => {
-    fetchTemplates();
-    if (user) {
-      loadDeployments();
-    } else {
-      setLastUpdated(null);
-    }
-  }, [user, loadDeployments]);
-
   const detectUserServices = async (apiKey: string) => {
     if (detectingServices) return null;
     
@@ -124,6 +88,63 @@ export default function Home() {
       setDetectingServices(false);
     }
   };
+
+  const loadDeployments = useCallback(async () => {
+    try {
+      // First, ensure we have the Render API key stored in the backend
+      if (renderApiKey) {
+        const detectedServices = await detectUserServices(renderApiKey);
+        
+        if (detectedServices) {
+          // Use the detected services to show correct statuses
+          const deploymentMap: DeploymentStatuses = {};
+          
+          Object.entries(detectedServices).forEach(([templateId, mcpData]) => {
+            const typedMcpData = mcpData as UserServiceData;
+            if (typedMcpData.available && typedMcpData.services.length > 0) {
+              const service = typedMcpData.services[0];
+              deploymentMap[templateId] = {
+                url: service.url,
+                status: service.status
+              };
+            }
+          });
+          
+          setDeployments(deploymentMap);
+          setLastUpdated(new Date());
+          return;
+        }
+      }
+      
+      // Fallback to database records if detection fails
+      const response = await apiRequest('/mcps/deployed');
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Convert deployments array to the format expected by the UI
+        const deploymentMap: DeploymentStatuses = {};
+        data.deployments.forEach((deployment: { template_id: string; deployment_url: string; status: string }) => {
+          deploymentMap[deployment.template_id] = {
+            url: deployment.deployment_url,
+            status: deployment.status
+          };
+        });
+        setDeployments(deploymentMap);
+        setLastUpdated(new Date());
+      }
+    } catch (error) {
+      console.error('Error loading deployments:', error);
+    }
+  }, [renderApiKey]);
+
+  useEffect(() => {
+    fetchTemplates();
+    if (user) {
+      loadDeployments();
+    } else {
+      setLastUpdated(null);
+    }
+  }, [user, loadDeployments]);
 
   const handleGitHubAuth = async () => {
     try {
