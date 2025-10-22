@@ -16,13 +16,34 @@ export const SMITHERY_ICONS: Record<string, string> = {
   'slack': '💬',
   'google_drive': '📁',
   'calendar': '📅',
-  'jira': '🎯'
+  'jira': '🎯',
+  'github': '🐙',
+  'exa': '🔍',
+  'supabase': '🗄️',
+  'brave': '🦁',
+  'deepwiki': '📚',
+  'memory': '🧠',
+  'linear': '📊',
+  'figma': '🎨',
+  'discord': '💬',
+  'twitter': '🐦',
+  'gmail-mcp': '📧',
+  'mem0-memory-mcp': '🧠',
+  'mem0-mcp': '🧠',
+  'supermemory': '🧠',
+  'naver-search-mcp': '🔍',
+  'paper-search-mcp-openai': '📄',
+  'mcpsemanticscholar': '🔬',
+  'supabase-mcp-lite': '🗄️'
 };
 
 export const SMITHERY_CATEGORIES: Record<string, string> = {
   'productivity': 'Productivity',
   'communication': 'Communication',
-  'development': 'Development'
+  'development': 'Development',
+  'search': 'Search',
+  'database': 'Database',
+  'memory': 'Memory'
 };
 
 export const MCP_CAPABILITIES: Record<string, string[]> = {

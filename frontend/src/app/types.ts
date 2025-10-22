@@ -24,8 +24,9 @@ export interface SmitheryMCP {
   name: string;
   description: string;
   smithery_url: string;
+  homepage: string;
+  icon_url: string;
   required_keys: string[];
-  category: string;
 }
 
 export interface UserServiceData {
