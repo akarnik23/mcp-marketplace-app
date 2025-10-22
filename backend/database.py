@@ -8,7 +8,15 @@ from cryptography.fernet import Fernet
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./marketplace.db")
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+engine = create_engine(
+    DATABASE_URL, 
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    # Add connection pooling for PostgreSQL
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=300
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
