@@ -18,7 +18,7 @@ def get_cipher():
     key = os.getenv("ENCRYPTION_KEY")
     if not key:
         raise ValueError("ENCRYPTION_KEY environment variable not set")
-    return Fernet(key.encode())
+    return Fernet(key.encode('utf-8'))
 
 def encrypt_value(value: str) -> str:
     """Encrypt a string value"""
