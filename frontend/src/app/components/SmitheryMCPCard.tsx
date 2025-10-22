@@ -152,7 +152,7 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
             >
               poke.com/settings/connections
             </a>
-            . You'll be redirected to Smithery to securely enter your API keys.
+            . You&apos;ll be redirected to Smithery to securely enter your API keys.
           </p>
         </div>
       )}

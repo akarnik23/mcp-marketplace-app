@@ -652,7 +652,7 @@ export default function Home() {
                   </div>
                   <div className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
-                    <p><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery's OAuth page</p>
+                    <p><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery&apos;s OAuth page</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>4</span>

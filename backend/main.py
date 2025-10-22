@@ -563,13 +563,12 @@ class SmitheryMCPRequest(BaseModel):
     mcp_id: str
     credentials: dict
 
-@app.post("/mcps/smithery/generate-url")
-async def generate_smithery_mcp_url(
-    request: SmitheryMCPRequest,
-    authorization: str = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
+@app.get("/mcps/smithery/{mcp_id}/url")
+async def get_smithery_mcp_url(
+    mcp_id: str,
+    authorization: str = Header(None, alias="Authorization")
 ):
-    """Generate a Smithery MCP URL with user credentials"""
+    """Get the Smithery MCP URL for direct connection - credentials handled by Smithery"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
@@ -580,38 +579,22 @@ async def generate_smithery_mcp_url(
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    # Get user from database
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
     # Check if MCP exists
-    if request.mcp_id not in SMITHERY_MCPS:
+    if mcp_id not in SMITHERY_MCPS:
         raise HTTPException(status_code=400, detail="Invalid MCP ID")
     
-    mcp_info = SMITHERY_MCPS[request.mcp_id]
+    mcp_info = SMITHERY_MCPS[mcp_id]
     
-    # Store user credentials for this MCP
-    for key_name, key_value in request.credentials.items():
-        if key_value:  # Only store non-empty values
-            encrypted_value = encrypt_value(key_value)
-            api_key = APIKey(
-                user_id=user.id,
-                key_name=f"smithery_{request.mcp_id}_{key_name}",
-                key_type="smithery_credential",
-                encrypted_value=encrypted_value
-            )
-            db.add(api_key)
-    db.commit()
-    
-    # Return the Smithery URL and instructions
+    # Return the generic Smithery URL - Smithery handles all credential management
     return {
-        "mcp_id": request.mcp_id,
+        "mcp_id": mcp_id,
         "smithery_url": mcp_info["smithery_url"],
         "name": mcp_info["name"],
         "description": mcp_info["description"],
-        "instructions": f"Add this URL to Poke at https://poke.com/settings/connections: {mcp_info['smithery_url']}",
-        "poke_settings_url": "https://poke.com/settings/connections"
+        "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
+        "poke_settings_url": "https://poke.com/settings/connections",
+        "smithery_configure_url": f"https://smithery.ai/configure/{mcp_id}?client=poke",
+        "security_note": "Your API keys are handled securely by Smithery, not stored on our servers."
     }
 
 if __name__ == "__main__":
