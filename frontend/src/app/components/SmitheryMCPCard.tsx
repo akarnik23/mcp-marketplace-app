@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ExternalLink, Copy, Check, Shield } from 'lucide-react';
+import { ExternalLink, Copy, Check } from 'lucide-react';
 import { SmitheryMCP } from '../types';
 import { SMITHERY_ICONS, SMITHERY_CATEGORIES } from '../constants';
 
@@ -56,19 +56,6 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
       {/* Description */}
       <p className="text-gray-300 text-sm mb-4">{mcp.description}</p>
 
-      {/* Security Notice */}
-      <div className="mb-4 p-3 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
-        <div className="flex items-start gap-2">
-          <Shield className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs font-medium text-green-400 mb-1">🔒 Secure Credential Handling</p>
-            <p className="text-xs text-gray-300">
-              Your API keys are handled securely by Smithery, not stored on our servers. 
-              Required: {mcp.required_keys.map(key => key.replace(/_/g, ' ')).join(', ')}
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Generated URL Display */}
       {generatedUrl && (
@@ -135,7 +122,7 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
           style={{ background: '#718392', color: '#ffffff', border: '1px solid #718392' }}
           title="Pre-configure on Smithery (optional)"
         >
-          <Shield className="w-4 h-4" />
+          ⚙️
         </a>
       </div>
 

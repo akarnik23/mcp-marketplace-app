@@ -109,14 +109,14 @@ export default function Home() {
 
   const loadDeployments = useCallback(async () => {
     try {
-      // First, ensure we have the Render API key stored in the backend
+      // Use detectUserServices to get real-time status from Render API
       if (renderApiKey) {
         const detectedServices = await detectUserServices(renderApiKey);
-        
+
         if (detectedServices) {
           // Use the detected services to show correct statuses
           const deploymentMap: DeploymentStatuses = {};
-          
+
           Object.entries(detectedServices).forEach(([templateId, mcpData]) => {
             const typedMcpData = mcpData as UserServiceData;
             if (typedMcpData.available && typedMcpData.services.length > 0) {
@@ -127,28 +127,10 @@ export default function Home() {
               };
             }
           });
-          
+
           setDeployments(deploymentMap);
           setLastUpdated(new Date());
-          return;
         }
-      }
-      
-      // Fallback to database records if detection fails
-      const response = await apiRequest('/mcps/deployed');
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Convert deployments array to the format expected by the UI
-        const deploymentMap: DeploymentStatuses = {};
-        data.deployments.forEach((deployment: { template_id: string; deployment_url: string; status: string }) => {
-          deploymentMap[deployment.template_id] = {
-            url: deployment.deployment_url,
-            status: deployment.status
-          };
-        });
-        setDeployments(deploymentMap);
-        setLastUpdated(new Date());
       }
     } catch (error) {
       console.error('Error loading deployments:', error);
@@ -558,26 +540,6 @@ export default function Home() {
         ) : (
           /* Dashboard */
           <div>
-            {/* Smithery MCPs Section */}
-            <section className="mb-16">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Smithery MCPs</h2>
-                <p style={{ color: '#718392' }}>Pre-hosted MCPs by Smithery - just add your credentials and connect to Poke</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.entries(smitheryMcps).map(([mcpId, mcp]) => (
-                  <SmitheryMCPCard
-                    key={mcpId}
-                    mcp={mcp}
-                    mcpId={mcpId}
-                    onGetUrl={getSmitheryUrl}
-                    isGettingUrl={generatingSmitheryUrl === mcpId}
-                  />
-                ))}
-              </div>
-            </section>
-
             {/* Self-Hosted MCP Servers Grid */}
             <section className="mb-16">
               <div className="mb-8 flex items-center justify-between">
@@ -629,6 +591,35 @@ export default function Home() {
                     />
                   );
                 })}
+              </div>
+            </section>
+
+            {/* Smithery MCPs Section */}
+            <section className="mb-16">
+              <div className="mb-8">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Smithery MCPs</h2>
+                    <p style={{ color: '#718392' }}>Pre-hosted MCPs by Smithery - connect directly to Poke</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm" style={{ color: '#718392' }}>
+                      You&apos;ll be asked to enter API keys on Smithery OAuth after adding to Poke if needed
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Object.entries(smitheryMcps).map(([mcpId, mcp]) => (
+                  <SmitheryMCPCard
+                    key={mcpId}
+                    mcp={mcp}
+                    mcpId={mcpId}
+                    onGetUrl={getSmitheryUrl}
+                    isGettingUrl={generatingSmitheryUrl === mcpId}
+                  />
+                ))}
               </div>
             </section>
 

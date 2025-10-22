@@ -116,57 +116,115 @@ MCP_TEMPLATES = {
     }
 }
 
-# Smithery MCP Servers - Pre-hosted by Smithery
-SMITHERY_MCPS = {
-    "notion": {
-        "name": "Notion MCP",
-        "description": "Access and manage Notion pages, databases, and content",
-        "smithery_url": "https://server.smithery.ai/@smithery/notion/mcp",
-        "required_keys": ["notion_token"],
-        "category": "productivity"
-    },
-    "gmail": {
-        "name": "Gmail MCP",
-        "description": "Read and manage Gmail messages and labels",
-        "smithery_url": "https://server.smithery.ai/@smithery/gmail/mcp",
-        "required_keys": ["gmail_credentials"],
-        "category": "communication"
-    },
-    "slack": {
-        "name": "Slack MCP",
-        "description": "Send messages and interact with Slack workspaces",
-        "smithery_url": "https://server.smithery.ai/@smithery/slack/mcp",
-        "required_keys": ["slack_token"],
-        "category": "communication"
-    },
-    "google_drive": {
-        "name": "Google Drive MCP",
-        "description": "Access and manage Google Drive files and folders",
-        "smithery_url": "https://server.smithery.ai/@smithery/google-drive/mcp",
-        "required_keys": ["google_credentials"],
-        "category": "productivity"
-    },
-    "calendar": {
-        "name": "Calendar MCP",
-        "description": "Manage Google Calendar events and schedules",
-        "smithery_url": "https://server.smithery.ai/@smithery/calendar/mcp",
-        "required_keys": ["google_credentials"],
-        "category": "productivity"
-    },
-    "jira": {
-        "name": "Jira MCP",
-        "description": "Access and manage Jira issues and projects",
-        "smithery_url": "https://server.smithery.ai/@smithery/jira/mcp",
-        "required_keys": ["jira_token", "jira_domain"],
-        "category": "development"
-    }
-}
+# Smithery MCP Servers - Fetched from Smithery Registry API
+# This will be populated dynamically from the Smithery API
+SMITHERY_MCPS = {}
+
+async def fetch_smithery_servers():
+    """Fetch MCP servers from Smithery Registry API"""
+    try:
+        # Search for popular MCP servers
+        search_queries = [
+            "notion", "gmail", "slack", "google drive", "calendar", "jira",
+            "github", "twitter", "discord", "trello", "asana"
+        ]
+        
+        all_servers = []
+        
+        for query in search_queries:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "https://registry.smithery.ai/servers",
+                    params={
+                        "q": f"{query} is:verified is:deployed",
+                        "pageSize": 5
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    servers = data.get("servers", [])
+                    all_servers.extend(servers)
+        
+        # Convert to our format
+        smithery_mcps = {}
+        for server in all_servers:
+            # Extract key name from qualified name (e.g., "smithery/notion" -> "notion")
+            key = server["qualifiedName"].split("/")[-1]
+            
+            # Determine required keys based on server name
+            required_keys = []
+            if "notion" in key.lower():
+                required_keys = ["notion_token"]
+            elif "gmail" in key.lower():
+                required_keys = ["gmail_credentials"]
+            elif "slack" in key.lower():
+                required_keys = ["slack_token"]
+            elif "google" in key.lower() or "drive" in key.lower() or "calendar" in key.lower():
+                required_keys = ["google_credentials"]
+            elif "jira" in key.lower():
+                required_keys = ["jira_token", "jira_domain"]
+            elif "github" in key.lower():
+                required_keys = ["github_token"]
+            elif "twitter" in key.lower():
+                required_keys = ["twitter_credentials"]
+            elif "discord" in key.lower():
+                required_keys = ["discord_token"]
+            
+            # Determine category
+            category = "productivity"
+            if any(comm in key.lower() for comm in ["gmail", "slack", "discord", "twitter"]):
+                category = "communication"
+            elif any(dev in key.lower() for dev in ["github", "jira", "git"]):
+                category = "development"
+            
+            smithery_mcps[key] = {
+                "name": server["displayName"],
+                "description": server["description"],
+                "smithery_url": server["homepage"],
+                "required_keys": required_keys,
+                "category": category,
+                "verified": server.get("verified", False),
+                "use_count": server.get("useCount", 0)
+            }
+        
+        return smithery_mcps
+        
+    except Exception as e:
+        print(f"Error fetching Smithery servers: {e}")
+        # Return some fallback servers if API fails
+        return {
+            "notion": {
+                "name": "Notion MCP",
+                "description": "Access and manage Notion pages, databases, and content",
+                "smithery_url": "https://smithery.ai/server/smithery/notion",
+                "required_keys": ["notion_token"],
+                "category": "productivity",
+                "verified": True,
+                "use_count": 0
+            },
+            "gmail": {
+                "name": "Gmail MCP",
+                "description": "Read and manage Gmail messages and labels", 
+                "smithery_url": "https://smithery.ai/server/smithery/gmail",
+                "required_keys": ["gmail_credentials"],
+                "category": "communication",
+                "verified": True,
+                "use_count": 0
+            }
+        }
 
 # Database initialization on startup
 @app.on_event("startup")
 async def startup_event():
     from database import create_tables
-    create_tables()  # Creates tables if they don't exist
+    create_tables()
+    
+    # Fetch Smithery servers on startup
+    global SMITHERY_MCPS
+    SMITHERY_MCPS = await fetch_smithery_servers()
+    print(f"Loaded {len(SMITHERY_MCPS)} Smithery MCP servers")  # Creates tables if they don't exist
 
 # Manual CORS handler
 @app.middleware("http")
@@ -275,6 +333,11 @@ async def get_mcp_templates():
 @app.get("/mcps/smithery")
 async def get_smithery_mcps():
     """Get available Smithery MCP servers"""
+    # Refresh servers if empty (in case startup failed)
+    global SMITHERY_MCPS
+    if not SMITHERY_MCPS:
+        SMITHERY_MCPS = await fetch_smithery_servers()
+    
     return {"smithery_mcps": SMITHERY_MCPS}
 
 class DetectServicesRequest(BaseModel):
@@ -579,13 +642,18 @@ async def get_smithery_mcp_url(
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
     
+    # Refresh servers if empty
+    global SMITHERY_MCPS
+    if not SMITHERY_MCPS:
+        SMITHERY_MCPS = await fetch_smithery_servers()
+    
     # Check if MCP exists
     if mcp_id not in SMITHERY_MCPS:
         raise HTTPException(status_code=400, detail="Invalid MCP ID")
     
     mcp_info = SMITHERY_MCPS[mcp_id]
     
-    # Return the generic Smithery URL - Smithery handles all credential management
+    # Return the actual Smithery URL from the registry
     return {
         "mcp_id": mcp_id,
         "smithery_url": mcp_info["smithery_url"],
@@ -594,7 +662,9 @@ async def get_smithery_mcp_url(
         "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
         "poke_settings_url": "https://poke.com/settings/connections",
         "smithery_configure_url": f"https://smithery.ai/configure/{mcp_id}?client=poke",
-        "security_note": "Your API keys are handled securely by Smithery, not stored on our servers."
+        "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
+        "verified": mcp_info.get("verified", False),
+        "use_count": mcp_info.get("use_count", 0)
     }
 
 if __name__ == "__main__":
