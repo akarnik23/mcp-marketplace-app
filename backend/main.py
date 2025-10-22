@@ -284,35 +284,38 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Check actual service status for each service by testing HTTP endpoints
+                # Check actual service status using hybrid approach
                 for service in mcp_services:
                     try:
-                        import requests
-                        # Use shorter timeout to avoid waking sleeping services
-                        response = requests.get(service["url"], timeout=2)
+                        # First check deployment status from Render API
+                        deploy_status = render_client.get_latest_deployment_status(service["id"])
+                        render_status = deploy_status.get("status", "unknown")
                         
-                        # Check response content for sleeping indicators
-                        response_text = response.text.lower()
-                        if "sleeping" in response_text:
+                        # If deployment is in progress or failed, use that status
+                        if render_status in ["created", "queued", "build_in_progress", "update_in_progress"]:
+                            service["status"] = "deploying"
+                        elif render_status in ["build_failed", "update_failed", "pre_deploy_failed"]:
+                            service["status"] = "error"
+                        elif render_status in ["deactivated", "canceled"]:
                             service["status"] = "sleeping"
-                        elif "waking up" in response_text:
-                            service["status"] = "sleeping"  # Actually waking up
-                        elif response.status_code in [200, 404, 405]:
-                            # 200 = working, 404/405 = awake but wrong endpoint
-                            service["status"] = "live"
-                        elif response.status_code in [502, 503]:
-                            # 502/503 could mean sleeping OR service awake but external API down
-                            # If we get a response (even error), service is likely awake
-                            service["status"] = "live"  # Service is awake but may have external API issues
+                        elif render_status == "live":
+                            # Deployment is live, but check if service is actually responding
+                            try:
+                                import requests
+                                response = requests.get(service["url"], timeout=2)
+                                if response.status_code in [200, 404, 405, 502, 503]:
+                                    service["status"] = "live"  # Service is awake and responding
+                                else:
+                                    service["status"] = "sleeping"  # Service not responding properly
+                            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                                service["status"] = "sleeping"  # Service is sleeping
+                            except Exception:
+                                service["status"] = "sleeping"  # Service is sleeping
                         else:
-                            service["status"] = "sleeping"
+                            service["status"] = "sleeping"  # Unknown status, assume sleeping
                             
-                    except requests.exceptions.Timeout:
-                        service["status"] = "sleeping"  # Timeout means sleeping
-                    except requests.exceptions.ConnectionError:
-                        service["status"] = "sleeping"  # Connection error means sleeping
                     except Exception:
-                        service["status"] = "sleeping"  # Any other error means sleeping
+                        service["status"] = "sleeping"  # If we can't get deployment status, assume sleeping
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {

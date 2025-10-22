@@ -54,6 +54,8 @@ export const MCPCard = ({
         return 'bg-yellow-900/30 text-yellow-300 border border-yellow-700';
       case 'sleeping':
         return 'bg-blue-900/30 text-blue-300 border border-blue-700';
+      case 'error':
+        return 'bg-red-900/30 text-red-300 border border-red-700';
       case 'offline':
         return 'bg-red-900/30 text-red-300 border border-red-700';
       default:
@@ -69,6 +71,8 @@ export const MCPCard = ({
         return 'Deploying';
       case 'sleeping':
         return 'Sleeping';
+      case 'error':
+        return 'Error';
       case 'offline':
         return 'Offline';
       default:
