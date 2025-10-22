@@ -59,15 +59,21 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
             # Deployment is live, but check if service is actually responding
             try:
                 import requests
-                response = requests.get(service_url, timeout=2)
-                if response.status_code in [200, 404, 405]:
-                    return "live"  # Service is awake and responding
-                elif response.status_code in [502, 503]:
-                    return "error"  # Service awake but having issues
-                else:
-                    return "sleeping"  # Service not responding properly
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-                return "sleeping"  # Service is sleeping
+                # Try health check endpoint first, then root
+                health_urls = [f"{service_url}/health", f"{service_url}/", service_url]
+                
+                for url in health_urls:
+                    try:
+                        response = requests.get(url, timeout=3)
+                        if response.status_code in [200, 404, 405]:
+                            return "live"  # Service is awake and responding
+                        elif response.status_code in [502, 503]:
+                            return "error"  # Service awake but having issues
+                    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                        continue  # Try next URL
+                
+                # If all URLs failed, service is sleeping
+                return "sleeping"
             except Exception:
                 return "sleeping"  # Service is sleeping
         else:
@@ -123,29 +129,70 @@ SMITHERY_MCPS = {}
 async def fetch_smithery_servers():
     """Fetch MCP servers from Smithery Registry API"""
     try:
-        # Search for popular MCP servers
-        search_queries = [
-            "notion", "gmail", "slack", "google drive", "calendar", "jira",
-            "github", "twitter", "discord", "trello", "asana"
-        ]
-        
+        # Try to get all servers first, then filter
         all_servers = []
         
-        for query in search_queries:
+        try:
+            # Get Smithery API key from environment
+            smithery_api_key = os.getenv("SMITHERY_API_KEY")
+            
+            if not smithery_api_key:
+                print("No SMITHERY_API_KEY found in environment variables")
+                raise Exception("Smithery API key not configured")
+            
             async with httpx.AsyncClient() as client:
+                # First try to get all servers without specific search
                 response = await client.get(
                     "https://registry.smithery.ai/servers",
                     params={
-                        "q": f"{query} is:verified is:deployed",
-                        "pageSize": 5
+                        "pageSize": 20
                     },
-                    timeout=10.0
+                    headers={
+                        "Authorization": f"Bearer {smithery_api_key}"
+                    },
+                    timeout=5.0
                 )
+                
+                print(f"Smithery API response status: {response.status_code}")
                 
                 if response.status_code == 200:
                     data = response.json()
                     servers = data.get("servers", [])
+                    print(f"Found {len(servers)} servers from Smithery API")
                     all_servers.extend(servers)
+                else:
+                    print(f"Smithery API error: {response.status_code} - {response.text}")
+                    
+        except Exception as e:
+            print(f"Failed to fetch from Smithery API: {e}")
+        
+        # If we didn't get many results, try some specific searches
+        if len(all_servers) < 5:
+            search_queries = ["notion", "gmail", "slack", "github", "calendar"]
+            
+            for query in search_queries:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(
+                            "https://registry.smithery.ai/servers",
+                            params={
+                                "q": query,
+                                "pageSize": 5
+                            },
+                            headers={
+                                "Authorization": f"Bearer {smithery_api_key}"
+                            },
+                            timeout=3.0
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            servers = data.get("servers", [])
+                            print(f"Found {len(servers)} servers for query '{query}'")
+                            all_servers.extend(servers)
+                except Exception as e:
+                    print(f"Failed to fetch Smithery servers for query '{query}': {e}")
+                    continue
         
         # Convert to our format
         smithery_mcps = {}
@@ -210,6 +257,24 @@ async def fetch_smithery_servers():
                 "smithery_url": "https://smithery.ai/server/smithery/gmail",
                 "required_keys": ["gmail_credentials"],
                 "category": "communication",
+                "verified": True,
+                "use_count": 0
+            },
+            "slack": {
+                "name": "Slack MCP",
+                "description": "Send messages and interact with Slack workspaces",
+                "smithery_url": "https://smithery.ai/server/smithery/slack",
+                "required_keys": ["slack_token"],
+                "category": "communication",
+                "verified": True,
+                "use_count": 0
+            },
+            "github": {
+                "name": "GitHub MCP",
+                "description": "Access and manage GitHub repositories and issues",
+                "smithery_url": "https://smithery.ai/server/smithery/github",
+                "required_keys": ["github_token"],
+                "category": "development",
                 "verified": True,
                 "use_count": 0
             }
@@ -438,7 +503,11 @@ async def detect_user_services(
             if mcp_services:
                 # Check actual service status using shared function
                 for service in mcp_services:
-                    service["status"] = get_service_status(service["id"], service["url"], render_client)
+                    status = get_service_status(service["id"], service["url"], render_client)
+                    # Convert status to more user-friendly terms
+                    if status == "error":
+                        status = "sleeping"  # Most "errors" are actually sleeping services
+                    service["status"] = status
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {

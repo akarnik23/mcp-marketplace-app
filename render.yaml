@@ -25,6 +25,8 @@ services:
         value: JBhBvwcYXWysDJ4GpoAA29nK2zCrCfj3z8uVlBI5wxo=
       - key: FRONTEND_URL
         value: https://mcp-marketplace-app-bay.vercel.app
+      - key: SMITHERY_API_KEY
+        sync: false
 
   # PostgreSQL Database
   - type: pserv
