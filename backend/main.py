@@ -280,10 +280,22 @@ async def detect_user_services(
                         "id": service.get("id"),
                         "name": service.get("name"),
                         "url": service_url,
-                        "status": service.get("serviceDetails", {}).get("buildCommand", "unknown")
+                        "status": "unknown"
                     })
             
             if mcp_services:
+                # Check actual service status for each service
+                for service in mcp_services:
+                    try:
+                        import requests
+                        response = requests.get(service["url"], timeout=5)
+                        if response.status_code in [200, 404, 405, 500, 502, 503]:
+                            service["status"] = "live"
+                        else:
+                            service["status"] = "sleeping"
+                    except:
+                        service["status"] = "sleeping"
+                
                 # User has this MCP set up
                 detected_mcps[template_id] = {
                     "available": True,
