@@ -173,8 +173,10 @@ async def fetch_smithery_servers():
     if (SMITHERY_CACHE_TIMESTAMP and 
         current_time - SMITHERY_CACHE_TIMESTAMP < SMITHERY_CACHE_DURATION and 
         SMITHERY_MCPS):
-        print("Using cached Smithery servers")
+        print(f"Using cached Smithery servers (age: {current_time - SMITHERY_CACHE_TIMESTAMP:.1f}s)")
         return SMITHERY_MCPS
+    else:
+        print(f"Cache miss - timestamp: {SMITHERY_CACHE_TIMESTAMP}, duration: {SMITHERY_CACHE_DURATION}, has_mcps: {bool(SMITHERY_MCPS)}")
     
     try:
         # Try to get all servers first, then filter
@@ -328,24 +330,14 @@ async def fetch_smithery_servers():
             if len(clean_description) > 200:
                 clean_description = clean_description[:197] + "..."
             
-            # Determine category using POKE_RELEVANT_CRITERIA
-            all_text = f"{name} {description} {qualified_name}"
-            category = "productivity"  # default
-            
-            for cat_name, mcp_terms in POKE_RELEVANT_CRITERIA.items():
-                for mcp_name, terms in mcp_terms.items():
-                    if any(term in all_text for term in terms):
-                        category = cat_name
-                        break
-                if category != "productivity":
-                    break
+            # No category detection needed - removed for simplicity
             
             return {
                 "key": key,
                 "name": server["displayName"],
                 "description": clean_description,
                 "homepage": server["homepage"],
-                "category": category,
+                "icon_url": server.get("iconUrl", ""),
                 "verified": server.get("verified", False),
                 "use_count": server.get("useCount", 0)
             }
@@ -371,8 +363,8 @@ async def fetch_smithery_servers():
                 "description": server_data["description"],
                 "smithery_url": mcp_url,
                 "homepage": server_data["homepage"],
+                "icon_url": server_data["icon_url"],
                 "required_keys": [],  # Smithery handles OAuth keys
-                "category": server_data["category"],
                 "verified": server_data["verified"],
                 "use_count": server_data["use_count"]
             }
@@ -854,10 +846,13 @@ async def get_smithery_mcp_url(
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    # Refresh servers if empty
+    # Refresh servers if empty (use cached data if available)
     global SMITHERY_MCPS
     if not SMITHERY_MCPS:
+        print(f"SMITHERY_MCPS is empty, fetching servers for {mcp_id}")
         SMITHERY_MCPS = await fetch_smithery_servers()
+    else:
+        print(f"Using existing SMITHERY_MCPS for {mcp_id}")
     
     # Check if MCP exists
     if mcp_id not in SMITHERY_MCPS:
