@@ -138,13 +138,23 @@ export default function Home() {
   }, [renderApiKey, detectUserServices]);
 
   useEffect(() => {
-    fetchTemplates();
-    fetchSmitheryMcps();
-    if (user) {
-      loadDeployments();
-    } else {
-      setLastUpdated(null);
-    }
+    // Load data sequentially to prevent connection queue bottleneck
+    const loadDataSequentially = async () => {
+      // Load templates first (most important)
+      await fetchTemplates();
+      
+      // Then load Smithery MCPs
+      await fetchSmitheryMcps();
+      
+      // Finally load deployments (least critical)
+      if (user) {
+        await loadDeployments();
+      } else {
+        setLastUpdated(null);
+      }
+    };
+    
+    loadDataSequentially();
   }, [user, loadDeployments]);
 
   const handleGitHubAuth = async () => {
