@@ -40,11 +40,27 @@ GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/au
 # Render API settings - now using user-provided keys only
 # RENDER_API_KEY = os.getenv("RENDER_API_KEY", "your_render_api_key")  # Removed - using user-provided keys
 
+# Cache service status to avoid repeated checks
+_service_status_cache = {}
+_cache_timestamp = None
+_cache_duration = 30  # 30 seconds cache
+
 def get_service_status(service_id: str, service_url: str, render_client: RenderClient) -> str:
     """
     Get the status of a service using hybrid approach (Render API + HTTP check)
     Returns: 'live', 'sleeping', 'deploying', or 'error'
     """
+    import time
+    
+    # Check cache first
+    current_time = time.time()
+    cache_key = f"{service_id}_{service_url}"
+    
+    if (_cache_timestamp and 
+        current_time - _cache_timestamp < _cache_duration and 
+        cache_key in _service_status_cache):
+        return _service_status_cache[cache_key]
+    
     try:
         # First check deployment status from Render API
         deploy_status = render_client.get_latest_deployment_status(service_id)
@@ -52,11 +68,11 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
         
         # If deployment is in progress or failed, use that status
         if render_status in ["created", "queued", "build_in_progress", "update_in_progress"]:
-            return "deploying"
+            status = "deploying"
         elif render_status in ["build_failed", "update_failed", "pre_deploy_failed"]:
-            return "error"
+            status = "error"
         elif render_status in ["deactivated", "canceled"]:
-            return "sleeping"
+            status = "sleeping"
         elif render_status == "live":
             # Deployment is live, but check if service is actually responding
             try:
@@ -68,21 +84,30 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
                     try:
                         response = requests.get(url, timeout=3)
                         if response.status_code in [200, 404, 405]:
-                            return "live"  # Service is awake and responding
+                            status = "live"  # Service is awake and responding
+                            break
                         elif response.status_code in [502, 503]:
-                            return "error"  # Service awake but having issues
+                            status = "error"  # Service awake but having issues
+                            break
                     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
                         continue  # Try next URL
-                
-                # If all URLs failed, service is sleeping
-                return "sleeping"
+                else:
+                    # If all URLs failed, service is sleeping
+                    status = "sleeping"
             except Exception:
-                return "sleeping"  # Service is sleeping
+                status = "sleeping"  # Service is sleeping
         else:
-            return "sleeping"  # Unknown status, assume sleeping
+            status = "sleeping"  # Unknown status, assume sleeping
             
     except Exception:
-        return "sleeping"  # If we can't get deployment status, assume sleeping
+        status = "sleeping"  # If we can't get deployment status, assume sleeping
+    
+    # Cache the result
+    global _service_status_cache, _cache_timestamp
+    _service_status_cache[cache_key] = status
+    _cache_timestamp = current_time
+    
+    return status
 
 # MCP Templates
 MCP_TEMPLATES = {
