@@ -280,71 +280,101 @@ async def fetch_smithery_servers():
             
             return score
         
-        # Sort servers by our scoring and take the top ones
-        scored_servers = [(server, score_server(server)) for server in all_servers]
-        scored_servers.sort(key=lambda x: x[1], reverse=True)
+        # Create whitelist of allowed MCP names from POKE_RELEVANT_CRITERIA
+        allowed_mcps = set()
+        for category, mcp_terms in POKE_RELEVANT_CRITERIA.items():
+            for mcp_name, terms in mcp_terms.items():
+                allowed_mcps.add(mcp_name)
         
-        # Take top servers with meaningful scores (filter out low-quality results)
-        top_servers = [server for server, score in scored_servers[:15] if score >= 10]
+        # Filter and score servers in one pass
+        relevant_servers = []
+        for server in all_servers:
+            # Check if server matches our criteria
+            server_name = server.get("displayName", "").lower()
+            qualified_name = server.get("qualifiedName", "").lower()
+            
+            # Check if this server matches our whitelist
+            is_relevant = any(
+                allowed_mcp in server_name or 
+                allowed_mcp in qualified_name or
+                server_name in allowed_mcp
+                for allowed_mcp in allowed_mcps
+            )
+            
+            if is_relevant:
+                score = score_server(server)
+                if score >= 10:
+                    relevant_servers.append((server, score))
+                    if len(relevant_servers) >= 15:  # Limit to 15 most relevant
+                        break
+        
+        # Sort by score and extract servers
+        relevant_servers.sort(key=lambda x: x[1], reverse=True)
+        top_servers = [server for server, score in relevant_servers]
         print(f"Selected {len(top_servers)} top servers from {len(all_servers)} total")
         
-        # Convert to our format
-        smithery_mcps = {}
-        for server in top_servers:
-            # Extract key name from qualified name (e.g., "smithery/notion" -> "notion")
+        # Helper function to process server data
+        def process_server(server):
+            # Extract server data once
             key = server["qualifiedName"].split("/")[-1]
-            
-            # Let Smithery handle required keys - we don't need to guess
-            required_keys = []  # Smithery will prompt for keys during OAuth
-            
-            # Smart category detection based on Poke-relevant criteria
             description = server.get("description", "").lower()
             name = server.get("displayName", "").lower()
             qualified_name = server.get("qualifiedName", "").lower()
             
-            # Combine all text for better detection
+            # Clean and standardize description
+            clean_description = " ".join(description.split())
+            import re
+            clean_description = re.sub(r'[^\x00-\x7F]+', '', clean_description)
+            if len(clean_description) > 200:
+                clean_description = clean_description[:197] + "..."
+            
+            # Determine category using POKE_RELEVANT_CRITERIA
             all_text = f"{name} {description} {qualified_name}"
             category = "productivity"  # default
             
-            # Use the same POKE_RELEVANT_CRITERIA for consistent categorization
             for cat_name, mcp_terms in POKE_RELEVANT_CRITERIA.items():
                 for mcp_name, terms in mcp_terms.items():
                     if any(term in all_text for term in terms):
                         category = cat_name
                         break
-                if category != "productivity":  # Found a match, stop checking
+                if category != "productivity":
                     break
             
+            return {
+                "key": key,
+                "name": server["displayName"],
+                "description": clean_description,
+                "homepage": server["homepage"],
+                "category": category,
+                "verified": server.get("verified", False),
+                "use_count": server.get("useCount", 0)
+            }
+        
+        # Convert to our format
+        smithery_mcps = {}
+        for server in top_servers:
+            server_data = process_server(server)
+            key = server_data["key"]
+            
             # Construct the proper MCP server URL
-            # Convert from homepage URL (https://smithery.ai/server/username/repo) 
-            # to MCP server URL (https://server.smithery.ai/username/repo/mcp)
-            homepage_url = server["homepage"]
+            homepage_url = server_data["homepage"]
             if "smithery.ai/server/" in homepage_url:
-                # Extract the server path and construct MCP URL
                 server_path = homepage_url.split("smithery.ai/server/")[1]
                 mcp_url = f"https://server.smithery.ai/{server_path}/mcp"
                 print(f"Converted {homepage_url} -> {mcp_url}")
             else:
-                # Fallback to homepage if we can't parse it
                 mcp_url = homepage_url
                 print(f"Could not parse homepage URL: {homepage_url}")
             
-            # Clean and standardize description
-            description = server["description"]
-            # Remove excessive whitespace and newlines
-            description = " ".join(description.split())
-            # Truncate to reasonable length (200 chars)
-            if len(description) > 200:
-                description = description[:197] + "..."
-            
             smithery_mcps[key] = {
-                "name": server["displayName"],
-                "description": description,
+                "name": server_data["name"],
+                "description": server_data["description"],
                 "smithery_url": mcp_url,
-                "required_keys": required_keys,
-                "category": category,
-                "verified": server.get("verified", False),
-                "use_count": server.get("useCount", 0)
+                "homepage": server_data["homepage"],
+                "required_keys": [],  # Smithery handles OAuth keys
+                "category": server_data["category"],
+                "verified": server_data["verified"],
+                "use_count": server_data["use_count"]
             }
         
         # Update cache
@@ -843,7 +873,7 @@ async def get_smithery_mcp_url(
         "description": mcp_info["description"],
         "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
         "poke_settings_url": "https://poke.com/settings/connections",
-        "smithery_configure_url": f"https://smithery.ai/configure/{mcp_id}?client=poke",
+        "smithery_info_url": mcp_info.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
         "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
         "verified": mcp_info.get("verified", False),
         "use_count": mcp_info.get("use_count", 0)
