@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
-import Image from 'next/image';
 import { SmitheryMCP } from '../types';
 import { SMITHERY_ICONS } from '../constants';
 
@@ -19,6 +18,8 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
 
   const handleGetUrl = async () => {
     try {
+      // Clear any existing URL first
+      setGeneratedUrl('');
       await onGetUrl(mcpId);
       setGeneratedUrl(mcp.smithery_url);
     } catch (error) {
@@ -45,7 +46,7 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
           <div className="flex items-center gap-3">
             {/* Use real icon from Smithery API */}
             {mcp.icon_url ? (
-              <Image src={mcp.icon_url} alt="icon" width={36} height={36} className="rounded-md" />
+              <img src={mcp.icon_url} alt="icon" className="w-9 h-9 rounded-md" />
             ) : (
               <div className="text-3xl">{SMITHERY_ICONS[mcpId] || '🔧'}</div>
             )}
@@ -56,30 +57,24 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
               </span>
             </div>
           </div>
+          
+          {/* Info button to Smithery homepage */}
+          <a
+            href={mcp.homepage}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-lg text-sm font-medium transition-all cursor-pointer hover:opacity-90 flex-shrink-0"
+            style={{ background: '#718392', color: '#ffffff', border: '1px solid #718392' }}
+            title="View details on Smithery"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
 
         {/* Description */}
         <p className="mb-4 text-white" style={{ minHeight: '3rem' }}>{mcp.description}</p>
 
 
-      {/* Generated URL Display */}
-      {generatedUrl && (
-        <div className="mb-4 p-3 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-300 mb-1">Smithery URL:</p>
-              <p className="text-sm text-white font-mono break-all">{generatedUrl}</p>
-            </div>
-            <button
-              onClick={copyToClipboard}
-              className="ml-2 p-2 rounded hover:bg-gray-700 transition-colors"
-              title="Copy URL"
-            >
-              {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
-            </button>
-          </div>
-        </div>
-      )}
 
         {/* Action Area */}
         <div className="mt-auto">
