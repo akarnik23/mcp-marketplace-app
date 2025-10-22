@@ -427,24 +427,7 @@ async def startup_event():
     SMITHERY_MCPS = await fetch_smithery_servers()
     print(f"Loaded {len(SMITHERY_MCPS)} Smithery MCP servers")  # Creates tables if they don't exist
 
-# Manual CORS handler
-@app.middleware("http")
-async def add_cors_header(request, call_next):
-    # Handle preflight OPTIONS requests
-    if request.method == "OPTIONS":
-        response = JSONResponse(content={}, status_code=200)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response
-    
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
+# CORS is handled by CORSMiddleware above
 
 # Routes
 @app.get("/")
