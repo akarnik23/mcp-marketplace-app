@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, Wrench, ExternalLink, Github } from 'lucide-react';
+import Image from 'next/image';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars, SmitheryMCP } from './types';
 import { ERROR_MESSAGES, MCP_ICONS } from './constants';
 import { useAuth } from './hooks/useAuth';
@@ -377,19 +378,25 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen text-white" style={{ background: 'linear-gradient(to bottom, #203a54, #000000)' }}>
+    <div className="min-h-screen text-white" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 25%, #203a54 50%, #1a202c 75%, #000000 100%)' }}>
       {/* Header */}
       <header className="backdrop-blur border-b" style={{ background: 'rgba(32,58,84,0.7)', borderColor: '#718392' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-xl p-2" style={{ background: '#203a54', border: '1px solid #718392' }}>
-                <Zap className="w-8 h-8 text-white" />
+                <Image 
+                  src="/interaction-palm.png" 
+                  alt="Interaction Palm" 
+                  width={32} 
+                  height={32}
+                  className="w-8 h-8"
+                />
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-white">MCP Marketplace</h1>
                 <p className="mt-1" style={{ color: '#718392' }}>
-                  {user ? `Welcome back, ${user.username}!` : 'Deploy MCPs to your Render account'}
+                  {user ? `Welcome back, ${user.username}!` : 'Hosted integrations for Poke'}
                 </p>
               </div>
             </div>
@@ -441,21 +448,31 @@ export default function Home() {
       {/* API Key Management */}
       {user && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium text-white">Render API Key</h3>
+          <div className="rounded-2xl shadow-lg border p-6" style={{ background: '#203a54', borderColor: '#718392' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg p-2" style={{ background: '#000000', border: '1px solid #718392' }}>
+                  <Wrench className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Render API Key</h3>
+                  <p className="text-sm" style={{ color: '#718392' }}>Required for deploying MCPs to your Render account</p>
+                </div>
+              </div>
               <div className="flex gap-2">
                 {renderApiKey ? (
                   <>
                     <button
                       onClick={() => setShowApiKeyInput(true)}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded cursor-pointer"
+                      className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      style={{ background: '#ffffff', color: '#203a54', border: '1px solid #718392' }}
                     >
                       Change Key
                     </button>
                     <button
                       onClick={handleClearApiKey}
-                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded cursor-pointer"
+                      className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
                     >
                       Clear Key
                     </button>
@@ -463,7 +480,8 @@ export default function Home() {
                 ) : (
                   <button
                     onClick={() => setShowApiKeyInput(true)}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded cursor-pointer"
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    style={{ background: '#ffffff', color: '#203a54', border: '1px solid #718392' }}
                   >
                     Add API Key
                   </button>
@@ -472,39 +490,59 @@ export default function Home() {
             </div>
             
             {renderApiKey && (
-              <div className="text-sm text-gray-300 mb-3">
-                Current key: {renderApiKey.length > 12 
-                  ? `${renderApiKey.substring(0, 8)}...${renderApiKey.substring(renderApiKey.length - 4)}`
-                  : `${renderApiKey.substring(0, 4)}...${renderApiKey.substring(renderApiKey.length - 2)}`
-                }
+              <div className="rounded-lg p-3 mb-4" style={{ background: '#000000', border: '1px solid #718392' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm font-medium text-white">Connected</span>
+                  </div>
+                  <code className="text-sm text-gray-300 font-mono">
+                    {renderApiKey.length > 12 
+                      ? `${renderApiKey.substring(0, 8)}...${renderApiKey.substring(renderApiKey.length - 4)}`
+                      : `${renderApiKey.substring(0, 4)}...${renderApiKey.substring(renderApiKey.length - 2)}`
+                    }
+                  </code>
+                </div>
               </div>
             )}
             
             {showApiKeyInput && (
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={newApiKey}
-                  onChange={(e) => setNewApiKey(e.target.value)}
-                  placeholder="Enter your Render API key"
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={handleUpdateApiKey}
-                  disabled={!newApiKey.trim()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded cursor-pointer"
-                >
-                  Update
-                </button>
-                <button
-                  onClick={() => {
-                    setShowApiKeyInput(false);
-                    setNewApiKey('');
-                  }}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded cursor-pointer"
-                >
-                  Cancel
-                </button>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={newApiKey}
+                    onChange={(e) => setNewApiKey(e.target.value)}
+                    placeholder="Enter your Render API key"
+                    className="flex-1 px-4 py-3 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white transition-all"
+                    style={{ background: '#000000', border: '1px solid #718392' }}
+                  />
+                  <button
+                    onClick={handleUpdateApiKey}
+                    disabled={!newApiKey.trim()}
+                    className="px-6 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ 
+                      background: !newApiKey.trim() ? '#718392' : '#ffffff', 
+                      color: !newApiKey.trim() ? '#ffffff' : '#203a54',
+                      border: '1px solid #718392'
+                    }}
+                  >
+                    Update
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowApiKeyInput(false);
+                      setNewApiKey('');
+                    }}
+                    className="px-6 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-xs" style={{ color: '#718392' }}>
+                  Get your API key from <a href="https://dashboard.render.com/account/api-keys" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline">Render Dashboard</a>
+                </p>
               </div>
             )}
           </div>
@@ -512,7 +550,7 @@ export default function Home() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
         {!user ? (
           /* Landing Page */
           <div className="text-center">
@@ -637,33 +675,8 @@ export default function Home() {
             <section className="rounded-2xl shadow-lg border p-8" style={{ background: '#203a54', borderColor: '#718392' }}>
               <h3 className="text-xl font-semibold text-white mb-4">How to Connect MCPs to Poke</h3>
               
-              {/* Smithery MCPs Instructions */}
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold text-white mb-3">Smithery MCPs (Pre-hosted)</h4>
-                <div className="space-y-3" style={{ color: '#718392' }}>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
-                    <p><strong className="text-white">Click &quot;Get Smithery URL&quot;</strong> to get the generic Smithery MCP URL</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
-                    <p><strong className="text-white">Copy the URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
-                      poke.com/settings/connections <ExternalLink className="w-4 h-4" />
-                    </a></p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
-                    <p><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery&apos;s OAuth page</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>4</span>
-                    <p><strong className="text-white">Optional:</strong> Pre-configure on Smithery using the shield button for a smoother experience</p>
-                  </div>
-                </div>
-              </div>
-
               {/* Self-hosted MCPs Instructions */}
-              <div>
+              <div className="mb-6">
                 <h4 className="text-lg font-semibold text-white mb-3">Self-Hosted MCPs (Your Render Account)</h4>
                 <div className="space-y-3" style={{ color: '#718392' }}>
                   <div className="flex gap-3">
@@ -683,6 +696,31 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Smithery MCPs Instructions */}
+              <div>
+                <h4 className="text-lg font-semibold text-white mb-3">Smithery MCPs (Pre-hosted)</h4>
+                <div className="space-y-3" style={{ color: '#718392' }}>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
+                    <p><strong className="text-white">Click &quot;Get Smithery URL&quot;</strong> to get the generic Smithery MCP URL</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
+                    <p><strong className="text-white">Copy the URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
+                      poke.com/settings/connections <ExternalLink className="w-4 h-4" />
+                    </a></p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
+                    <p><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery&apos;s OAuth page</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>4</span>
+                    <p><strong className="text-white">Optional:</strong> Pre-configure apikeys directly on Smithery using the shield button</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="mt-6 p-4 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
                 <p className="text-sm" style={{ color: '#718392' }}>
                   <strong className="text-white">💡 Pro Tip:</strong> Smithery MCPs are pre-hosted and ready to use immediately, while self-hosted MCPs give you full control over your own infrastructure.
@@ -692,7 +730,7 @@ export default function Home() {
 
             {/* Footer */}
             <footer className="mt-16 text-center" style={{ color: '#718392' }}>
-              <p>MCP Marketplace • Deploy your own MCP servers</p>
+              <p>MCP Marketplace Built for The Interaction Company</p>
       </footer>
           </div>
         )}
