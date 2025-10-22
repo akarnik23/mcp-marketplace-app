@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, Wrench, ExternalLink, Github } from 'lucide-react';
-import Link from 'next/link';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars, SmitheryMCP } from './types';
 import { ERROR_MESSAGES, MCP_ICONS } from './constants';
 import { useAuth } from './hooks/useAuth';
@@ -77,7 +76,7 @@ export default function Home() {
     }
   };
 
-  const detectUserServices = async (apiKey: string) => {
+  const detectUserServices = useCallback(async (apiKey: string) => {
     if (detectingServices) return null;
     
     setDetectingServices(true);
@@ -106,11 +105,11 @@ export default function Home() {
     } finally {
       setDetectingServices(false);
     }
-  };
+  }, [detectingServices]);
 
   const loadDeployments = useCallback(async () => {
     try {
-      // Use detectUserServices to get real-time status from Render API
+      // First, ensure we have the Render API key stored in the backend
       if (renderApiKey) {
         const detectedServices = await detectUserServices(renderApiKey);
         
@@ -131,12 +130,30 @@ export default function Home() {
           
           setDeployments(deploymentMap);
           setLastUpdated(new Date());
+          return;
         }
+      }
+      
+      // Fallback to database records if detection fails
+      const response = await apiRequest('/mcps/deployed');
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Convert deployments array to the format expected by the UI
+        const deploymentMap: DeploymentStatuses = {};
+        data.deployments.forEach((deployment: { template_id: string; deployment_url: string; status: string }) => {
+          deploymentMap[deployment.template_id] = {
+            url: deployment.deployment_url,
+            status: deployment.status
+          };
+        });
+        setDeployments(deploymentMap);
+        setLastUpdated(new Date());
       }
     } catch (error) {
       console.error('Error loading deployments:', error);
     }
-  }, [renderApiKey]);
+  }, [renderApiKey, detectUserServices]);
 
   useEffect(() => {
     fetchTemplates();
@@ -212,33 +229,25 @@ export default function Home() {
     }
   };
 
-  const generateSmitheryUrl = async (mcpId: string, credentials: Record<string, string>) => {
+  const getSmitheryUrl = async (mcpId: string) => {
     if (!user) return;
     
     setGeneratingSmitheryUrl(mcpId);
     
     try {
-      const response = await apiRequest('/mcps/smithery/generate-url', {
-        method: 'POST',
-        body: JSON.stringify({
-          mcp_id: mcpId,
-          credentials: credentials
-        })
-      });
+      const response = await apiRequest(`/mcps/smithery/${mcpId}/url`);
       
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || error.message || 'Failed to generate URL');
+        throw new Error(error.detail || error.message || 'Failed to get URL');
       }
       
       const data = await response.json();
-      // The URL is already available in the SmitheryMCP object
-      // We just need to show success feedback
-      console.log('Smithery URL generated:', data);
+      console.log('Smithery URL retrieved:', data);
       
     } catch (error) {
-      console.error(`Error generating Smithery URL for ${mcpId}:`, error);
-      alert('Failed to generate Smithery URL. Please try again.');
+      console.error(`Error getting Smithery URL for ${mcpId}:`, error);
+      alert('Failed to get Smithery URL. Please try again.');
     } finally {
       setGeneratingSmitheryUrl(null);
     }
@@ -562,8 +571,8 @@ export default function Home() {
                     key={mcpId}
                     mcp={mcp}
                     mcpId={mcpId}
-                    onGenerateUrl={generateSmitheryUrl}
-                    isGenerating={generatingSmitheryUrl === mcpId}
+                    onGetUrl={getSmitheryUrl}
+                    isGettingUrl={generatingSmitheryUrl === mcpId}
                   />
                 ))}
               </div>
@@ -633,17 +642,21 @@ export default function Home() {
                 <div className="space-y-3" style={{ color: '#718392' }}>
                   <div className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
-                    <p><strong className="text-white">Enter your credentials</strong> (API keys, tokens, etc.) in the Smithery MCP cards above</p>
+                    <p><strong className="text-white">Click &quot;Get Smithery URL&quot;</strong> to get the generic Smithery MCP URL</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
-                    <p><strong className="text-white">Click "Generate URL"</strong> to get your personalized Smithery MCP URL</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
                     <p><strong className="text-white">Copy the URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
                       poke.com/settings/connections <ExternalLink className="w-4 h-4" />
                     </a></p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
+                    <p><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery's OAuth page</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>4</span>
+                    <p><strong className="text-white">Optional:</strong> Pre-configure on Smithery using the shield button for a smoother experience</p>
                   </div>
                 </div>
               </div>
@@ -654,7 +667,7 @@ export default function Home() {
                 <div className="space-y-3" style={{ color: '#718392' }}>
                   <div className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
-                    <p><strong className="text-white">Click "Deploy MCP"</strong> on any self-hosted server card</p>
+                    <p><strong className="text-white">Click &quot;Deploy MCP&quot;</strong> on any self-hosted server card</p>
                   </div>
                   <div className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
