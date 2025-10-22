@@ -850,39 +850,7 @@ async def get_smithery_mcp_url(
         print(f"JWT verification took {time.time() - start_time:.3f}s")
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
-    # Refresh servers if empty (use cached data if available)
-    global SMITHERY_MCPS
-    cache_start = time.time()
-    if not SMITHERY_MCPS:
-        print(f"SMITHERY_MCPS is empty, fetching servers for {mcp_id}")
-        SMITHERY_MCPS = await fetch_smithery_servers()
-        print(f"Fetching servers took {time.time() - cache_start:.3f}s")
-    else:
-        print(f"Using existing SMITHERY_MCPS for {mcp_id}")
-        print(f"Cache lookup took {time.time() - cache_start:.3f}s")
-    
-    # Check if MCP exists
-    if mcp_id not in SMITHERY_MCPS:
-        raise HTTPException(status_code=400, detail="Invalid MCP ID")
-    
-    mcp_info = SMITHERY_MCPS[mcp_id]
-    
-    # Return the actual Smithery URL from the registry
-    total_time = time.time() - start_time
-    print(f"Total endpoint time: {total_time:.3f}s")
-    return {
-        "mcp_id": mcp_id,
-        "smithery_url": mcp_info["smithery_url"],
-        "name": mcp_info["name"],
-        "description": mcp_info["description"],
-        "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
-        "poke_settings_url": "https://poke.com/settings/connections",
-        "smithery_info_url": mcp_info.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
-        "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
-        "verified": mcp_info.get("verified", False),
-        "use_count": mcp_info.get("use_count", 0)
-    }
+
 
 if __name__ == "__main__":
     import uvicorn
