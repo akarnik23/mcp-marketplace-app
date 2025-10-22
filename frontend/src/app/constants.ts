@@ -10,6 +10,21 @@ export const MCP_ICONS: Record<string, string> = {
   'hackernews': '/hackerNews.png'
 };
 
+export const SMITHERY_ICONS: Record<string, string> = {
+  'notion': '📝',
+  'gmail': '📧',
+  'slack': '💬',
+  'google_drive': '📁',
+  'calendar': '📅',
+  'jira': '🎯'
+};
+
+export const SMITHERY_CATEGORIES: Record<string, string> = {
+  'productivity': 'Productivity',
+  'communication': 'Communication',
+  'development': 'Development'
+};
+
 export const MCP_CAPABILITIES: Record<string, string[]> = {
   'news': ['get_headlines', 'search_news', 'get_category_news', 'get_rss_feed'],
   'weather': ['get_current_weather', 'get_forecast', 'get_weather_alerts'],

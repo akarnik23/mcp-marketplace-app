@@ -38,6 +38,44 @@ GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/au
 # Render API settings - now using user-provided keys only
 # RENDER_API_KEY = os.getenv("RENDER_API_KEY", "your_render_api_key")  # Removed - using user-provided keys
 
+def get_service_status(service_id: str, service_url: str, render_client: RenderClient) -> str:
+    """
+    Get the status of a service using hybrid approach (Render API + HTTP check)
+    Returns: 'live', 'sleeping', 'deploying', or 'error'
+    """
+    try:
+        # First check deployment status from Render API
+        deploy_status = render_client.get_latest_deployment_status(service_id)
+        render_status = deploy_status.get("status", "unknown")
+        
+        # If deployment is in progress or failed, use that status
+        if render_status in ["created", "queued", "build_in_progress", "update_in_progress"]:
+            return "deploying"
+        elif render_status in ["build_failed", "update_failed", "pre_deploy_failed"]:
+            return "error"
+        elif render_status in ["deactivated", "canceled"]:
+            return "sleeping"
+        elif render_status == "live":
+            # Deployment is live, but check if service is actually responding
+            try:
+                import requests
+                response = requests.get(service_url, timeout=2)
+                if response.status_code in [200, 404, 405]:
+                    return "live"  # Service is awake and responding
+                elif response.status_code in [502, 503]:
+                    return "error"  # Service awake but having issues
+                else:
+                    return "sleeping"  # Service not responding properly
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                return "sleeping"  # Service is sleeping
+            except Exception:
+                return "sleeping"  # Service is sleeping
+        else:
+            return "sleeping"  # Unknown status, assume sleeping
+            
+    except Exception:
+        return "sleeping"  # If we can't get deployment status, assume sleeping
+
 # MCP Templates
 MCP_TEMPLATES = {
     "news": {
@@ -75,6 +113,52 @@ MCP_TEMPLATES = {
         "description": "Hacker News stories and search",
         "required_keys": [],
         "template": "hackernews_template"
+    }
+}
+
+# Smithery MCP Servers - Pre-hosted by Smithery
+SMITHERY_MCPS = {
+    "notion": {
+        "name": "Notion MCP",
+        "description": "Access and manage Notion pages, databases, and content",
+        "smithery_url": "https://server.smithery.ai/@smithery/notion/mcp",
+        "required_keys": ["notion_token"],
+        "category": "productivity"
+    },
+    "gmail": {
+        "name": "Gmail MCP",
+        "description": "Read and manage Gmail messages and labels",
+        "smithery_url": "https://server.smithery.ai/@smithery/gmail/mcp",
+        "required_keys": ["gmail_credentials"],
+        "category": "communication"
+    },
+    "slack": {
+        "name": "Slack MCP",
+        "description": "Send messages and interact with Slack workspaces",
+        "smithery_url": "https://server.smithery.ai/@smithery/slack/mcp",
+        "required_keys": ["slack_token"],
+        "category": "communication"
+    },
+    "google_drive": {
+        "name": "Google Drive MCP",
+        "description": "Access and manage Google Drive files and folders",
+        "smithery_url": "https://server.smithery.ai/@smithery/google-drive/mcp",
+        "required_keys": ["google_credentials"],
+        "category": "productivity"
+    },
+    "calendar": {
+        "name": "Calendar MCP",
+        "description": "Manage Google Calendar events and schedules",
+        "smithery_url": "https://server.smithery.ai/@smithery/calendar/mcp",
+        "required_keys": ["google_credentials"],
+        "category": "productivity"
+    },
+    "jira": {
+        "name": "Jira MCP",
+        "description": "Access and manage Jira issues and projects",
+        "smithery_url": "https://server.smithery.ai/@smithery/jira/mcp",
+        "required_keys": ["jira_token", "jira_domain"],
+        "category": "development"
     }
 }
 
@@ -188,6 +272,11 @@ async def get_mcp_templates():
     """Get available MCP templates"""
     return {"templates": MCP_TEMPLATES}
 
+@app.get("/mcps/smithery")
+async def get_smithery_mcps():
+    """Get available Smithery MCP servers"""
+    return {"smithery_mcps": SMITHERY_MCPS}
+
 class DetectServicesRequest(BaseModel):
     render_api_key: str
 
@@ -284,38 +373,9 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Check actual service status using hybrid approach
+                # Check actual service status using shared function
                 for service in mcp_services:
-                    try:
-                        # First check deployment status from Render API
-                        deploy_status = render_client.get_latest_deployment_status(service["id"])
-                        render_status = deploy_status.get("status", "unknown")
-                        
-                        # If deployment is in progress or failed, use that status
-                        if render_status in ["created", "queued", "build_in_progress", "update_in_progress"]:
-                            service["status"] = "deploying"
-                        elif render_status in ["build_failed", "update_failed", "pre_deploy_failed"]:
-                            service["status"] = "error"
-                        elif render_status in ["deactivated", "canceled"]:
-                            service["status"] = "sleeping"
-                        elif render_status == "live":
-                            # Deployment is live, but check if service is actually responding
-                            try:
-                                import requests
-                                response = requests.get(service["url"], timeout=2)
-                                if response.status_code in [200, 404, 405, 502, 503]:
-                                    service["status"] = "live"  # Service is awake and responding
-                                else:
-                                    service["status"] = "sleeping"  # Service not responding properly
-                            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-                                service["status"] = "sleeping"  # Service is sleeping
-                            except Exception:
-                                service["status"] = "sleeping"  # Service is sleeping
-                        else:
-                            service["status"] = "sleeping"  # Unknown status, assume sleeping
-                            
-                    except Exception:
-                        service["status"] = "sleeping"  # If we can't get deployment status, assume sleeping
+                    service["status"] = get_service_status(service["id"], service["url"], render_client)
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {
@@ -451,71 +511,6 @@ async def deploy_mcp(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
 
-@app.options("/mcps/deployed")
-async def options_get_deployed_mcps():
-    """Handle CORS preflight for /mcps/deployed"""
-    return JSONResponse(content={}, status_code=200)
-
-@app.get("/mcps/deployed")
-async def get_deployed_mcps(
-    authorization: str = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
-):
-    """Get user's deployed MCPs"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    # Verify JWT token
-    try:
-        token = authorization.replace("Bearer ", "")
-        user_id = verify_token(token)
-    except HTTPException:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    # Get user from database
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Get user's deployments from database
-    deployments = db.query(Deployment).filter(Deployment.user_id == user.id).all()
-    
-    deployment_list = []
-    for deployment in deployments:
-        # Always check the actual service status by testing the URL
-        if deployment.status in ["deploying", "build_in_progress", "live", "sleeping"]:
-            try:
-                # Test the actual service URL to see if it's responding
-                import requests
-                response = requests.get(deployment.deployment_url, timeout=5)
-                
-                # Any response means the service is awake and running
-                if response.status_code in [200, 404, 405, 500, 502, 503]:
-                    if deployment.status != "live":
-                        deployment.status = "live"
-                        db.commit()
-                else:
-                    # Unexpected status code - still consider it live if we got a response
-                    if deployment.status != "live":
-                        deployment.status = "live"
-                        db.commit()
-                        
-            except Exception as e:
-                if deployment.status != "sleeping":
-                    deployment.status = "sleeping"
-                    db.commit()
-        
-        deployment_list.append({
-            "id": str(deployment.id),
-            "template_id": deployment.template_id,
-            "status": deployment.status,
-            "deployment_url": deployment.deployment_url,
-            "render_service_id": deployment.render_service_id,
-            "created_at": deployment.created_at.isoformat(),
-            "updated_at": deployment.updated_at.isoformat()
-        })
-    
-    return {"deployments": deployment_list}
 
 @app.options("/auth/me")
 async def options_auth_me():
@@ -563,6 +558,61 @@ async def validate_render_key(request: ValidateRenderKeyRequest):
         return {"valid": True, "service_count": len(services)}
     except Exception as e:
         return {"valid": False, "error": str(e)}
+
+class SmitheryMCPRequest(BaseModel):
+    mcp_id: str
+    credentials: dict
+
+@app.post("/mcps/smithery/generate-url")
+async def generate_smithery_mcp_url(
+    request: SmitheryMCPRequest,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Generate a Smithery MCP URL with user credentials"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if MCP exists
+    if request.mcp_id not in SMITHERY_MCPS:
+        raise HTTPException(status_code=400, detail="Invalid MCP ID")
+    
+    mcp_info = SMITHERY_MCPS[request.mcp_id]
+    
+    # Store user credentials for this MCP
+    for key_name, key_value in request.credentials.items():
+        if key_value:  # Only store non-empty values
+            encrypted_value = encrypt_value(key_value)
+            api_key = APIKey(
+                user_id=user.id,
+                key_name=f"smithery_{request.mcp_id}_{key_name}",
+                key_type="smithery_credential",
+                encrypted_value=encrypted_value
+            )
+            db.add(api_key)
+    db.commit()
+    
+    # Return the Smithery URL and instructions
+    return {
+        "mcp_id": request.mcp_id,
+        "smithery_url": mcp_info["smithery_url"],
+        "name": mcp_info["name"],
+        "description": mcp_info["description"],
+        "instructions": f"Add this URL to Poke at https://poke.com/settings/connections: {mcp_info['smithery_url']}",
+        "poke_settings_url": "https://poke.com/settings/connections"
+    }
 
 if __name__ == "__main__":
     import uvicorn
