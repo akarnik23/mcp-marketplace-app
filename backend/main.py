@@ -772,10 +772,15 @@ async def update_service_env_vars(
         render_client = RenderClient(request.render_api_key)
         
         # Update env vars via Render API
+        print(f"Updating Render service {service_id} with env vars: {list(request.env_vars.keys())}")
+        print(f"Env var values (first 4 chars): {[(k, v[:4] if v else None) for k, v in request.env_vars.items()]}")
         render_client.update_service_env_vars(service_id, request.env_vars)
+        print(f"Render env vars updated successfully")
         
         # Restart service to apply changes
+        print(f"Restarting service {service_id}")
         render_client.restart_service(service_id)
+        print(f"Service restarted successfully")
         
         # Try to find or create a deployment record to store env vars
         deployment = db.query(Deployment).filter(

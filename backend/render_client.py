@@ -140,11 +140,26 @@ class RenderClient:
             # Prepare the environment variables list
             env_vars_list = []
             
-            # Add existing environment variables (preserve non-MCP ones)
+            # Build a map of keys being updated
+            keys_being_updated = set(env_vars.keys())
+            
+            # Add existing environment variables (preserve non-MCP ones and MCP ones not being updated)
             existing_env_vars = service.get('envVars', [])
             for env_var in existing_env_vars:
-                # Only preserve non-MCP environment variables
-                if not env_var.get('key', '').startswith(('GITHUB_TOKEN', 'REDDIT_', 'SPOTIFY_')):
+                key = env_var.get('key', '')
+                
+                # Check if this is an MCP variable
+                is_mcp_var = any([
+                    key.lower().startswith('github_'),
+                    key.lower().startswith('reddit_'),
+                    key.lower().startswith('spotify_'),
+                    key.upper() == 'GITHUB_TOKEN',
+                    key.upper().startswith('REDDIT_'),
+                    key.upper().startswith('SPOTIFY_')
+                ])
+                
+                # Keep if: (1) not an MCP var, OR (2) MCP var but NOT being updated now
+                if not is_mcp_var or key not in keys_being_updated:
                     # Ensure existing env vars have proper structure
                     if isinstance(env_var, dict) and 'key' in env_var and 'value' in env_var:
                         env_vars_list.append({
@@ -152,7 +167,7 @@ class RenderClient:
                             "value": str(env_var['value'])
                         })
             
-            # Add new MCP environment variables
+            # Add new/updated MCP environment variables
             for key, value in env_vars.items():
                 # Ensure values are strings and handle special characters
                 if value is not None:
@@ -161,6 +176,7 @@ class RenderClient:
                         "value": str(value)
                     })
             
+            print(f"Final env_vars_list being sent to Render: {[(item['key'], item['value'][:4] if item['value'] else None) for item in env_vars_list]}")
             
             # Prepare the JSON payload - try different formats
             # Format 1: With envVars wrapper
