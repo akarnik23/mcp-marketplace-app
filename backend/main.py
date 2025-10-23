@@ -55,14 +55,14 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
     """
     import time
     
-    # Check cache first
-    current_time = time.time()
-    cache_key = f"{service_id}_{service_url}"
+    # Check cache first - temporarily disabled for debugging
+    # current_time = time.time()
+    # cache_key = f"{service_id}_{service_url}"
     
-    if (_cache_timestamp and 
-        current_time - _cache_timestamp < _cache_duration and 
-        cache_key in _service_status_cache):
-        return _service_status_cache[cache_key]
+    # if (_cache_timestamp and 
+    #     current_time - _cache_timestamp < _cache_duration and 
+    #     cache_key in _service_status_cache):
+    #     return _service_status_cache[cache_key]
     
     try:
         # First check deployment status from Render API
@@ -105,9 +105,9 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
     except Exception:
         status = "sleeping"  # If we can't get deployment status, assume sleeping
     
-    # Cache the result
-    _service_status_cache[cache_key] = status
-    _cache_timestamp = current_time
+    # Cache the result - temporarily disabled for debugging
+    # _service_status_cache[cache_key] = status
+    # _cache_timestamp = current_time
     
     return status
 
@@ -649,11 +649,17 @@ async def detect_user_services(
             if mcp_services:
                 # Check service status sequentially to avoid multithreading issues
                 for service in mcp_services:
-                    status = get_service_status(service["id"], service["url"], render_client)
-                    # Convert status to more user-friendly terms
-                    if status == "error":
-                        status = "sleeping"  # Most "errors" are actually sleeping services
-                    service["status"] = status
+                    try:
+                        print(f"Checking service: {service['name']} (ID: {service['id']})")
+                        status = get_service_status(service["id"], service["url"], render_client)
+                        print(f"Service {service['name']} status: {status}")
+                        # Convert status to more user-friendly terms
+                        if status == "error":
+                            status = "sleeping"  # Most "errors" are actually sleeping services
+                        service["status"] = status
+                    except Exception as e:
+                        print(f"Error checking service {service['name']}: {e}")
+                        service["status"] = "error"
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {
@@ -677,6 +683,9 @@ async def detect_user_services(
         }
         
     except Exception as e:
+        print(f"Error in detect_user_services: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to detect services: {str(e)}")
 
 class DeployRequest(BaseModel):
