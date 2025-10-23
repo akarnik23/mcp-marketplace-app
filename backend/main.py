@@ -13,6 +13,7 @@ from render_client import RenderClient, MCP_SERVICE_IDS
 from database import get_db, User, Deployment, APIKey, MCPTemplate, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
 from auth import create_access_token, verify_token
+from smithery_integration import get_smithery_mcps_cached, search_smithery_mcps
 
 # Load environment variables from .env file
 load_dotenv()
@@ -536,12 +537,15 @@ async def get_mcp_templates():
 @app.get("/mcps/smithery")
 async def get_smithery_mcps():
     """Get available Smithery MCP servers"""
-    # Refresh servers if empty (in case startup failed)
-    global SMITHERY_MCPS
-    if not SMITHERY_MCPS:
-        SMITHERY_MCPS = await fetch_smithery_servers()
-    
-    return {"smithery_mcps": SMITHERY_MCPS}
+    # Use the optimized Smithery integration
+    smithery_mcps = get_smithery_mcps_cached()
+    return {"smithery_mcps": smithery_mcps}
+
+@app.get("/mcps/smithery/search")
+async def search_smithery_mcps_endpoint(query: str, limit: int = 20):
+    """Search Smithery MCP servers with relevance scoring"""
+    results = search_smithery_mcps(query, limit)
+    return {"results": results, "query": query, "count": len(results)}
 
 class DetectServicesRequest(BaseModel):
     render_api_key: str
@@ -872,16 +876,14 @@ async def get_smithery_mcp_url(
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    # Refresh servers if empty (use cached data if available)
-    global SMITHERY_MCPS
-    if not SMITHERY_MCPS:
-        SMITHERY_MCPS = await fetch_smithery_servers()
+    # Use the optimized Smithery integration with caching
+    smithery_mcps = get_smithery_mcps_cached()
     
     # Check if MCP exists
-    if mcp_id not in SMITHERY_MCPS:
+    if mcp_id not in smithery_mcps:
         raise HTTPException(status_code=400, detail="Invalid MCP ID")
     
-    mcp_info = SMITHERY_MCPS[mcp_id]
+    mcp_info = smithery_mcps[mcp_id]
     return {
         "mcp_id": mcp_id,
         "smithery_url": mcp_info["smithery_url"],

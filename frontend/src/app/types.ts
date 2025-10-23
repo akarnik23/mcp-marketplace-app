@@ -21,6 +21,7 @@ export interface MCPTemplate {
 }
 
 export interface SmitheryMCP {
+  mcp_id: string;
   name: string;
   description: string;
   smithery_url: string;
