@@ -21,7 +21,7 @@ export default function Home() {
   const [deployments, setDeployments] = useState<DeploymentStatuses>({});
   const [deploying, setDeploying] = useState<string | null>(null);
   const [userServices, setUserServices] = useState<Record<string, UserServiceData>>({});
-  const [detectingServices, setDetectingServices] = useState<boolean>(false);
+  const [, setDetectingServices] = useState<boolean>(false);
   const [apiKeyError, setApiKeyError] = useState<string>('');
   const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
   const [newApiKey, setNewApiKey] = useState<string>('');
@@ -83,8 +83,6 @@ export default function Home() {
   };
 
   const detectUserServices = useCallback(async (apiKey: string) => {
-    if (detectingServices) return null;
-    
     setDetectingServices(true);
     try {
       const response = await apiRequest('/mcps/detect-services', {
@@ -111,7 +109,7 @@ export default function Home() {
     } finally {
       setDetectingServices(false);
     }
-  }, []); // Remove detectingServices dependency
+  }, []); // No dependencies needed - this function is stable
 
   const loadDeployments = useCallback(async () => {
     try {
@@ -161,7 +159,7 @@ export default function Home() {
     };
     
     loadDataSequentially();
-  }, [user]);
+  }, [user, loadDeployments]); // Now safe to include loadDeployments since detectUserServices is stable
 
   const handleGitHubAuth = async () => {
     try {

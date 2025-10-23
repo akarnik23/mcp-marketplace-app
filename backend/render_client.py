@@ -87,38 +87,6 @@ class RenderClient:
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to get Render service: {e}")
     
-    def get_service_status(self, service_id: str) -> Dict[str, Any]:
-        """Get just the service status"""
-        try:
-            service = self.get_service(service_id)
-            
-            # Check if service is suspended
-            suspended = service.get("suspended", "unknown")
-            
-            # Check if service has a URL (means it's live)
-            service_url = service.get("serviceDetails", {}).get("url")
-            
-            # Determine status based on available information
-            if suspended == "suspended":
-                # Service is suspended
-                return {"status": "offline"}
-            elif service_url:
-                # Service has a URL - test if it's actually responding
-                try:
-                    import requests
-                    response = requests.get(service_url, timeout=5)
-                    if response.status_code == 200:
-                        return {"status": "live"}
-                    else:
-                        return {"status": "sleeping"}
-                except Exception as e:
-                    return {"status": "sleeping"}
-            else:
-                # Service exists but no URL or other status
-                return {"status": "deploying"}
-                
-        except Exception as e:
-            return None
 
     def get_latest_deployment_status(self, service_id: str) -> Dict[str, Any]:
         """Get the status of the latest deployment for a service"""
@@ -152,17 +120,6 @@ class RenderClient:
         except Exception as e:
             return None
     
-    def delete_service(self, service_id: str) -> bool:
-        """Delete a service"""
-        try:
-            response = requests.delete(
-                f"{self.base_url}/services/{service_id}",
-                headers=self.headers
-            )
-            response.raise_for_status()
-            return True
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to delete Render service: {e}")
     
     def update_service_env_vars(self, service_id: str, env_vars: Dict[str, str]) -> Dict[str, Any]:
         """

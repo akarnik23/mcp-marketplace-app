@@ -34,7 +34,6 @@ def fetch_page(page, page_size=100):
             return page, data.get('servers', []), data.get('pagination', {})
     
     except Exception as e:
-        print(f"Error on page {page}: {str(e)}")
         return page, None, None
 
 def get_all_servers(max_pages=10, page_size=100, force_refresh=False, max_workers=3, 
@@ -50,19 +49,15 @@ def get_all_servers(max_pages=10, page_size=100, force_refresh=False, max_worker
             if cache_age_hours < cache_hours:
                 with open(cache_file, 'r') as f:
                     cached_data = json.load(f)
-                    print(f"Using cached data ({len(cached_data)} servers, {cache_age_hours:.1f} hours old)")
                     return cached_data
-                    
-            print(f"Cache is {cache_age_hours:.1f} hours old (expiration: {cache_hours}h), refreshing...")
+            
         except Exception as e:
-            print(f"Cache error: {e}, fetching fresh data")
+            pass
     
     # Fetch first page to get pagination info
-    print("Fetching initial page to determine total pages...")
     _, servers, pagination = fetch_page(1, page_size)
     
     if servers is None:
-        print("Failed to fetch initial page")
         return []
     
     all_servers = servers
@@ -70,25 +65,21 @@ def get_all_servers(max_pages=10, page_size=100, force_refresh=False, max_worker
     total_pages = pagination.get('totalPages', 1)
     total_count = pagination.get('totalCount', 0)
     
-    print(f"Found {total_count} total servers across {total_pages} pages")
     pages_to_fetch = min(total_pages, max_pages)
     
     if pages_to_fetch > 1:
-        print(f"Fetching {pages_to_fetch-1} more pages in sequence...")
         
         # Fetch pages in sequence to preserve order
         for page in range(2, pages_to_fetch + 1):
             _, page_servers, _ = fetch_page(page, page_size)
             if page_servers:
                 all_servers.extend(page_servers)
-                print(f"Received page {page} ({len(page_servers)} servers, total: {len(all_servers)}/{total_count})")
             time.sleep(0.2)  # Small delay between requests
     
     # Save to cache
     with open(cache_file, 'w') as f:
         json.dump(all_servers, f)
     
-    print(f"Successfully retrieved {len(all_servers)} servers")
     return all_servers
 
 def calculate_relevance_score(server, query, case_sensitive=False):
@@ -178,7 +169,6 @@ def search_servers(servers, query, case_sensitive=False):
 def get_cache_info(cache_file='smithery_cache.json'):
     """Get information about the cache file"""
     if not os.path.exists(cache_file):
-        print(f"No cache file found at '{cache_file}'")
         return
         
     # Get file stats
@@ -200,11 +190,7 @@ def get_cache_info(cache_file='smithery_cache.json'):
         server_count = "Error reading file"
     
     # Print info
-    print(f"Cache File: {cache_file}")
-    print(f"Size: {size_bytes / 1024:.1f} KB")
-    print(f"Age: {age_hours:.1f} hours ({age_days:.1f} days)")
-    print(f"Last Modified: {datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Server Count: {server_count}")
+    pass
 
 def format_server_info(server):
     """Format server info for display"""
@@ -253,7 +239,6 @@ def main():
         get_cache_info(cache_file)
         return
     
-    print("=== Smithery MCP Server Search ===")
     start_time = time.time()
     
     # Get all servers
@@ -266,24 +251,20 @@ def main():
     )
     
     fetch_time = time.time() - start_time
-    print(f"Fetched data in {fetch_time:.2f} seconds")
+    
     
     # If specific server check requested
     if args.check:
-        print(f"Checking for server: {args.check}")
         matches = search_servers(all_servers, args.check, case_sensitive=True)
         exact_matches = [s for s in matches if s.get('qualifiedName') == args.check]
         
         if exact_matches:
-            print(f"Found server with exact ID: {args.check}")
             print(format_server_info(exact_matches[0]))
         elif matches:
-            print(f"Found {len(matches)} similar servers but none with exact ID: {args.check}")
             for i, server in enumerate(matches[:3], 1):
-                print(f"\n--- Similar Result #{i} ---")
                 print(format_server_info(server))
         else:
-            print(f"No server found with ID: {args.check}")
+            pass
         return
     
     # If term provided via command line, search and exit
@@ -292,9 +273,7 @@ def main():
         results = search_servers(all_servers, args.term)
         search_time = time.time() - search_start
         
-        print(f"\nFound {len(results)} matching servers for '{args.term}' in {search_time:.2f} seconds:")
         for i, server in enumerate(results, 1):
-            print(f"\n--- Result #{i} ---")
             print(format_server_info(server))
         return
     
@@ -311,9 +290,7 @@ def main():
         search_time = time.time() - search_start
         
         # Display results
-        print(f"\nFound {len(results)} matching servers for '{query}' in {search_time:.2f} seconds:")
         for i, server in enumerate(results, 1):
-            print(f"\n--- Result #{i} ---")
             print(format_server_info(server))
             
         # Option to force refresh cache
