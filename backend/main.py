@@ -635,6 +635,57 @@ async def get_smithery_mcp_url(
         "use_count": 0
     }
 
+def mask_api_key(value: str) -> str:
+    """Mask API key for display"""
+    if not value or len(value) <= 4:
+        return "••••"
+    return "••••••••••••••••"
+
+@app.get("/mcps/deployments/{deployment_id}/env-vars")
+async def get_deployment_env_vars(
+    deployment_id: str,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Get masked environment variables for a deployment"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get deployment
+    deployment = db.query(Deployment).filter(
+        Deployment.id == deployment_id,
+        Deployment.user_id == user_id
+    ).first()
+    
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+    
+    # Get API keys for this deployment
+    api_keys = db.query(APIKey).filter(
+        APIKey.deployment_id == deployment_id,
+        APIKey.key_type == "mcp_env_var"
+    ).all()
+    
+    # Return masked values
+    masked_vars = {}
+    for api_key in api_keys:
+        try:
+            # Decrypt and mask the value
+            decrypted_value = decrypt_value(api_key.encrypted_value)
+            masked_vars[api_key.key_name] = mask_api_key(decrypted_value)
+        except Exception:
+            # If decryption fails, just show masked value
+            masked_vars[api_key.key_name] = "••••••••••••••••"
+    
+    return {"env_vars": masked_vars}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

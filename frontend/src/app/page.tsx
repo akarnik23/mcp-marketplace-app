@@ -134,6 +134,13 @@ export default function Home() {
 
           setDeployments(deploymentMap);
           setLastUpdated(new Date());
+          
+          // Load masked env vars for existing deployments
+          Object.entries(deploymentMap).forEach(([templateKey, deployment]) => {
+            if (deployment.deployment_id) {
+              loadMaskedEnvVars(deployment.deployment_id, templateKey);
+            }
+          });
         }
       }
     } catch (error) {
@@ -197,6 +204,12 @@ export default function Home() {
   };
 
   const updateEnvVar = (templateKey: string, keyName: string, value: string) => {
+    // If user starts typing and the current value is masked, clear it
+    const currentValue = envVars[templateKey]?.[keyName] || '';
+    if (value && currentValue.includes('••••')) {
+      value = ''; // Clear masked value when user starts typing
+    }
+    
     setEnvVars(prev => ({
       ...prev,
       [templateKey]: {
@@ -208,6 +221,24 @@ export default function Home() {
 
   const getEnvVarValue = (templateKey: string, keyName: string): string => {
     return envVars[templateKey]?.[keyName] || '';
+  };
+
+  const loadMaskedEnvVars = async (deploymentId: string, templateKey: string) => {
+    try {
+      const response = await apiRequest(`/mcps/deployments/${deploymentId}/env-vars`);
+      if (response.ok) {
+        const data = await response.json();
+        setEnvVars(prev => ({
+          ...prev,
+          [templateKey]: {
+            ...prev[templateKey],
+            ...data.env_vars
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading masked env vars:', error);
+    }
   };
 
   const getTimeAgo = (date: Date): string => {
@@ -374,7 +405,8 @@ export default function Home() {
         ...prev,
         [templateKey]: {
           url: data.deployment_url || service.url,
-          status: 'deploying'  // Keep as deploying until backend confirms it's live
+          status: 'deploying',  // Keep as deploying until backend confirms it's live
+          deployment_id: data.deployment_id
         }
       }));
       

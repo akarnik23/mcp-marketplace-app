@@ -44,8 +44,8 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            {/* Use real icon from Smithery API */}
-            {mcp.icon_url ? (
+            {/* Use real icon from Smithery API, but filter out generic GitHub fallback icons */}
+            {mcp.icon_url && !mcp.icon_url.includes('icons.duckduckgo.com/ip3/github.com.ico') ? (
               <img 
                 src={mcp.icon_url} 
                 alt="icon" 
