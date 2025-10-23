@@ -180,12 +180,12 @@ export const MCPCard = ({
                     </div>
                   ))}
                   
-                  {/* Update Environment Variables Button - show for deployed MCPs with deployment_id OR service_id */}
-                  {((deployment?.deployment_id || deployment?.service_id || userService?.services?.[0]?.id) && onUpdateDeploymentEnvVars) && (
+                  {/* Update Environment Variables Button - show for deployed MCPs with service_id */}
+                  {((deployment?.service_id || userService?.services?.[0]?.id) && onUpdateDeploymentEnvVars) && (
                     <div className="mt-4">
                       <button
                         onClick={() => onUpdateDeploymentEnvVars(
-                          deployment?.deployment_id || deployment?.service_id || userService?.services?.[0]?.id || '', 
+                          deployment?.service_id || userService?.services?.[0]?.id || '', 
                           templateKey
                         )}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium active:scale-95 transition-all cursor-pointer"
