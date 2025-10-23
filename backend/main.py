@@ -785,7 +785,9 @@ async def update_service_env_vars(
         
         if deployment:
             # Update env vars in database for this deployment
+            print(f"Saving env vars to DB: {list(request.env_vars.keys())}")
             for key_name, key_value in request.env_vars.items():
+                print(f"Processing key: {key_name}, has value: {bool(key_value)}")
                 if key_value:
                     # Check if key exists
                     existing_key = db.query(APIKey).filter(
@@ -795,8 +797,10 @@ async def update_service_env_vars(
                     ).first()
                     
                     if existing_key:
+                        print(f"Updating existing key: {key_name}")
                         existing_key.encrypted_value = encrypt_value(key_value)
                     else:
+                        print(f"Creating new key: {key_name}")
                         api_key = APIKey(
                             user_id=user_id,
                             deployment_id=deployment.id,
@@ -807,6 +811,9 @@ async def update_service_env_vars(
                         db.add(api_key)
             
             db.commit()
+            print(f"DB commit successful for {len(request.env_vars)} keys")
+        else:
+            print(f"No deployment found for service_id: {service_id}")
         
         return {"message": "Environment variables updated successfully"}
         
