@@ -345,7 +345,7 @@ async def detect_user_services(
                     return service
                 
                 # Use ThreadPoolExecutor to check services in parallel
-                # Limit to 6 workers for better performance while staying safe
+                # Use 6 workers (one per service) for fast parallel status checks
                 with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                     futures = [executor.submit(check_service_status, service) for service in mcp_services]
                     # Handle potential failures gracefully
@@ -733,6 +733,43 @@ async def update_deployment_env_vars(
     db.commit()
     
     return {"message": "Environment variables updated successfully"}
+
+class UpdateServiceEnvVarsRequest(BaseModel):
+    env_vars: dict
+    render_api_key: str
+
+@app.post("/mcps/services/{service_id}/env-vars")
+async def update_service_env_vars(
+    service_id: str,
+    request: UpdateServiceEnvVarsRequest,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Update environment variables for a service using service_id directly (fallback when deployment_id not available)"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    try:
+        # Create Render client with user's API key
+        render_client = RenderClient(request.render_api_key)
+        
+        # Update env vars via Render API
+        render_client.update_service_env_vars(service_id, request.env_vars)
+        
+        # Restart service to apply changes
+        render_client.restart_service(service_id)
+        
+        return {"message": "Environment variables updated successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update env vars: {str(e)}")
 
 @app.get("/mcps/deployments")
 async def get_user_deployments(

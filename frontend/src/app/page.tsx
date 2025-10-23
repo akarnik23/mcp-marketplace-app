@@ -150,7 +150,8 @@ export default function Home() {
               deploymentMap[templateId] = {
                 url: service.url,
                 status: service.status,
-                deployment_id: deploymentId || undefined
+                deployment_id: deploymentId || undefined,
+                service_id: service.id  // Always include service_id for env var updates
               };
             }
           });
@@ -264,7 +265,7 @@ export default function Home() {
     }
   };
 
-  const updateDeploymentEnvVars = async (deploymentId: string, templateKey: string) => {
+  const updateDeploymentEnvVars = async (idOrServiceId: string, templateKey: string) => {
     try {
       const envVarsToUpdate = envVars[templateKey] || {};
       // Filter out masked values (don't send them to backend)
@@ -274,15 +275,31 @@ export default function Home() {
         )
       );
       
-      const response = await apiRequest(`/mcps/deployments/${deploymentId}/env-vars`, {
+      // Try deployment_id endpoint first
+      let response = await apiRequest(`/mcps/deployments/${idOrServiceId}/env-vars`, {
         method: 'POST',
         body: JSON.stringify({ env_vars: filteredEnvVars })
       });
       
+      // If that fails (404), try the service-based endpoint
+      if (!response.ok && response.status === 404) {
+        response = await apiRequest(`/mcps/services/${idOrServiceId}/env-vars`, {
+          method: 'POST',
+          body: JSON.stringify({ 
+            env_vars: filteredEnvVars,
+            render_api_key: renderApiKey 
+          })
+        });
+      }
+      
       if (response.ok) {
-        // Reload masked values to show updated state
-        await loadMaskedEnvVars(deploymentId, templateKey);
+        // Reload masked values to show updated state (if deployment_id exists)
+        const deployment = deployments[templateKey];
+        if (deployment?.deployment_id) {
+          await loadMaskedEnvVars(deployment.deployment_id, templateKey);
+        }
         alert('Environment variables updated successfully!');
+        await loadDeployments(); // Refresh deployment status
       } else {
         const errorData = await response.json();
         alert(`Error updating environment variables: ${errorData.detail || 'Unknown error'}`);

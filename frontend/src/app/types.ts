@@ -51,6 +51,7 @@ export interface DeploymentStatus {
   url: string;
   status: string;
   deployment_id?: string;
+  service_id?: string;
 }
 
 export type DeploymentStatuses = Record<string, DeploymentStatus>;
