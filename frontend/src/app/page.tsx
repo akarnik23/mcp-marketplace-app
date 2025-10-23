@@ -113,7 +113,19 @@ export default function Home() {
 
   const loadDeployments = useCallback(async () => {
     try {
-      // Use detectUserServices to get real-time status from Render API
+      // First get deployment IDs from our database
+      let deploymentIds: Record<string, any> = {};
+      try {
+        const response = await apiRequest('/mcps/deployments');
+        if (response.ok) {
+          const data = await response.json();
+          deploymentIds = data.deployments || {};
+        }
+      } catch (error) {
+        console.error('Error loading deployment IDs:', error);
+      }
+
+      // Then use detectUserServices to get real-time status from Render API
       if (renderApiKey) {
         const detectedServices = await detectUserServices(renderApiKey);
 
@@ -125,9 +137,20 @@ export default function Home() {
             const typedMcpData = mcpData as UserServiceData;
             if (typedMcpData.available && typedMcpData.services.length > 0) {
               const service = typedMcpData.services[0];
+              
+              // Try to find matching deployment ID by service ID or URL
+              let deploymentId = null;
+              for (const [serviceId, deploymentInfo] of Object.entries(deploymentIds)) {
+                if (serviceId === service.id || deploymentInfo.url === service.url) {
+                  deploymentId = deploymentInfo.deployment_id;
+                  break;
+                }
+              }
+              
               deploymentMap[templateId] = {
                 url: service.url,
-                status: service.status
+                status: service.status,
+                deployment_id: deploymentId
               };
             }
           });

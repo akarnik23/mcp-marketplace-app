@@ -63,27 +63,17 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
         elif render_status in ["deactivated", "canceled"]:
             status = "sleeping"
         elif render_status == "live":
-            # Deployment is live, but check if service is actually responding
             try:
-                # Try root endpoint first (most likely to respond quickly), then health check
-                health_urls = [service_url, f"{service_url}/", f"{service_url}/health"]
-                
-                for url in health_urls:
-                    try:
-                        response = requests.get(url, timeout=1)  # Reduced from 3 to 1 second
-                        if response.status_code in [200, 404, 405]:
-                            status = "live"  # Service is awake and responding
-                            break
-                        elif response.status_code in [502, 503]:
-                            status = "error"  # Service awake but having issues
-                            break
-                    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-                        continue  # Try next URL
+                # Just check root endpoint with shorter timeout
+                response = requests.get(service_url, timeout=0.3)  # Reduced to 0.3s
+                if response.status_code in [200, 404, 405]:
+                    status = "live"
+                elif response.status_code in [502, 503]:
+                    status = "error"
                 else:
-                    # If all URLs failed, service is sleeping
                     status = "sleeping"
-            except Exception:
-                status = "sleeping"  # Service is sleeping
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                status = "sleeping"  # Timed out = sleeping
         else:
             status = "sleeping"  # Unknown status, assume sleeping
             
@@ -355,8 +345,8 @@ async def detect_user_services(
                     return service
                 
                 # Use ThreadPoolExecutor to check services in parallel
-                # Limit to 3 workers for better performance while staying safe
-                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                # Limit to 6 workers for better performance while staying safe
+                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
                     futures = [executor.submit(check_service_status, service) for service in mcp_services]
                     # Handle potential failures gracefully
                     completed_services = []
@@ -743,6 +733,37 @@ async def update_deployment_env_vars(
     db.commit()
     
     return {"message": "Environment variables updated successfully"}
+
+@app.get("/mcps/deployments")
+async def get_user_deployments(
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Get all deployments for the authenticated user"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get all deployments for this user
+    deployments = db.query(Deployment).filter(Deployment.user_id == user_id).all()
+    
+    # Return deployment info with service URLs for matching
+    deployment_info = {}
+    for deployment in deployments:
+        deployment_info[deployment.render_service_id] = {
+            "deployment_id": str(deployment.id),
+            "template_id": deployment.template_id,
+            "status": deployment.status,
+            "url": deployment.deployment_url
+        }
+    
+    return {"deployments": deployment_info}
 
 if __name__ == "__main__":
     import uvicorn
