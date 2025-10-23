@@ -7,8 +7,7 @@ import os
 from datetime import datetime, timedelta
 import json
 from dotenv import load_dotenv
-# import concurrent.futures  # Removed - using sequential processing
-# import threading  # Removed - not needed
+import concurrent.futures
 from render_client import RenderClient, MCP_SERVICE_IDS
 from database import get_db, User, Deployment, APIKey, MCPTemplate, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
@@ -212,7 +211,7 @@ async def fetch_smithery_servers():
                     headers={
                         "Authorization": f"Bearer {smithery_api_key}"
                     },
-                    timeout=5.0
+                    timeout=2.0
                 )
                 
                 print(f"Smithery API response status: {response.status_code}")
@@ -228,31 +227,40 @@ async def fetch_smithery_servers():
         except Exception as e:
             print(f"Failed to fetch from Smithery API: {e}")
         
-        # If we didn't get enough results, try a few more pages
+        # If we didn't get enough results, fetch additional pages in parallel
         if len(all_servers) < 30:
-            for page in range(2, 4):  # Get pages 2 and 3
+            async def fetch_page(page_num):
                 try:
                     async with httpx.AsyncClient() as client:
                         response = await client.get(
                             "https://registry.smithery.ai/servers",
                             params={
-                                "page": page,
+                                "page": page_num,
                                 "pageSize": 25
                             },
                             headers={
                                 "Authorization": f"Bearer {smithery_api_key}"
                             },
-                            timeout=3.0
+                            timeout=1.5
                         )
                         
                         if response.status_code == 200:
                             data = response.json()
                             servers = data.get("servers", [])
-                            print(f"Found {len(servers)} servers from page {page}")
-                            all_servers.extend(servers)
+                            print(f"Found {len(servers)} servers from page {page_num}")
+                            return servers
                 except Exception as e:
-                    print(f"Failed to fetch page {page}: {e}")
-                    continue
+                    print(f"Failed to fetch page {page_num}: {e}")
+                    return []
+            
+            # Fetch pages 2 and 3 in parallel
+            import asyncio
+            tasks = [fetch_page(page) for page in range(2, 4)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for servers in results:
+                if isinstance(servers, list):
+                    all_servers.extend(servers)
         
         # Apply our own semantic filtering to find the best servers
         def score_server(server):
@@ -631,13 +639,20 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Check service status sequentially to avoid multithreading issues
-                for service in mcp_services:
+                # Test: Try multithreading again (caching is disabled)
+                def check_service_status(service):
                     status = get_service_status(service["id"], service["url"], render_client)
                     # Convert status to more user-friendly terms
                     if status == "error":
                         status = "sleeping"  # Most "errors" are actually sleeping services
                     service["status"] = status
+                    return service
+                
+                # Use ThreadPoolExecutor to check services in parallel
+                # Limit to 2 workers to avoid overwhelming free tier
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = [executor.submit(check_service_status, service) for service in mcp_services]
+                    mcp_services = [future.result() for future in futures]
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {
