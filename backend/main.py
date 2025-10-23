@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timedelta
 import json
 from dotenv import load_dotenv
+import concurrent.futures
 from render_client import RenderClient, MCP_SERVICE_IDS
 from database import get_db, User, Deployment, APIKey, MCPTemplate, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
@@ -645,9 +646,6 @@ async def detect_user_services(
             
             if mcp_services:
                 # Check actual service status using shared function - in parallel for speed
-                import asyncio
-                import concurrent.futures
-                
                 def check_service_status(service):
                     status = get_service_status(service["id"], service["url"], render_client)
                     # Convert status to more user-friendly terms
