@@ -29,6 +29,11 @@ export default function Home() {
   const [envVars, setEnvVars] = useState<EnvVars>({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [generatingSmitheryUrl, setGeneratingSmitheryUrl] = useState<string | null>(null);
+  
+  // Smithery search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SmitheryMCP[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
 
   // Update timestamp display every minute
@@ -243,6 +248,30 @@ export default function Home() {
       alert('Failed to get Smithery URL. Please try again.');
     } finally {
       setGeneratingSmitheryUrl(null);
+    }
+  };
+
+  const searchSmitheryMcps = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const response = await apiRequest(`/mcps/smithery/search?query=${encodeURIComponent(query)}&limit=10`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setSearchResults(data.results);
+    } catch (error) {
+      console.error('Error searching Smithery MCPs:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -656,6 +685,54 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="mb-8">
+                <div className="flex gap-4 items-center">
+                  <input
+                    type="text"
+                    placeholder="Search for more MCPs..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && searchSmitheryMcps(searchQuery)}
+                    className="flex-1 p-3 rounded-lg bg-slate-800 text-white border border-slate-600 focus:border-blue-500 focus:outline-none"
+                  />
+                  <button 
+                    onClick={() => searchSmitheryMcps(searchQuery)}
+                    disabled={isSearching || !searchQuery.trim()}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSearching ? 'Searching...' : 'Search'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-bold text-white mb-4">
+                    Search Results ({searchResults.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {searchResults.map((mcp, index) => (
+                      <SmitheryMCPCard
+                        key={`search-${mcp.mcp_id}-${index}`}
+                        mcp={mcp}
+                        mcpId={mcp.mcp_id}
+                        onGetUrl={getSmitheryUrl}
+                        isGettingUrl={generatingSmitheryUrl === mcp.mcp_id}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Curated MCPs */}
+              <div className="mb-8">
+                <h3 className="text-lg font-bold text-white mb-4">
+                  Featured MCPs ({Object.keys(smitheryMcps).length})
+                </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
