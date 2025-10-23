@@ -114,7 +114,7 @@ export default function Home() {
   const loadDeployments = useCallback(async () => {
     try {
       // First get deployment IDs from our database
-      let deploymentIds: Record<string, any> = {};
+      let deploymentIds: Record<string, { deployment_id: string; template_id: string; status: string; url: string }> = {};
       try {
         const response = await apiRequest('/mcps/deployments');
         if (response.ok) {
@@ -150,7 +150,7 @@ export default function Home() {
               deploymentMap[templateId] = {
                 url: service.url,
                 status: service.status,
-                deployment_id: deploymentId
+                deployment_id: deploymentId || undefined
               };
             }
           });
@@ -269,7 +269,7 @@ export default function Home() {
       const envVarsToUpdate = envVars[templateKey] || {};
       // Filter out masked values (don't send them to backend)
       const filteredEnvVars = Object.fromEntries(
-        Object.entries(envVarsToUpdate).filter(([key, value]) => 
+        Object.entries(envVarsToUpdate).filter(([, value]) => 
           value && !value.includes('••••')
         )
       );
