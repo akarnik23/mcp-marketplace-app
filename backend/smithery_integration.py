@@ -131,11 +131,14 @@ def search_smithery_mcps(query: str, limit: int = 20) -> List[Dict[str, Any]]:
     # Format results
     formatted_results = []
     for server in results[:limit]:
+        qualified_name = server.get('qualifiedName', '')
+        # Use the same simple format as curated MCPs
+        mcp_id = qualified_name.split("/")[-1] if qualified_name else ''
         formatted_results.append({
-            "mcp_id": server.get('qualifiedName', ''),
+            "mcp_id": mcp_id,
             "name": server.get('displayName', ''),
             "description": server.get('description', ''),
-            "smithery_url": f"https://smithery.ai/server/{server.get('qualifiedName', '')}",
+            "smithery_url": f"https://smithery.ai/server/{qualified_name}",
             "homepage": server.get('homepage', ''),
             "verified": server.get('verified', False),
             "use_count": server.get('useCount', 0),

@@ -45,9 +45,9 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             {/* Use real icon from Smithery API */}
-            {mcp.icon_url ? (
+            {(mcp.icon_url || mcp.image_url) ? (
               <img 
-                src={mcp.icon_url} 
+                src={mcp.icon_url || mcp.image_url} 
                 alt="icon" 
                 className="w-9 h-9 rounded-md" 
               />
