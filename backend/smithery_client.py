@@ -6,9 +6,13 @@ import urllib.error
 import urllib.parse
 import argparse
 import concurrent.futures
+import os
 from datetime import datetime
 
-api_key = '1fda6202-f4d2-4612-99de-3ce2b2f4be2c'  # Your Smithery API key
+# Get API key from environment variable
+api_key = os.getenv('SMITHERY_API_KEY')
+if not api_key:
+    raise ValueError("SMITHERY_API_KEY environment variable is required")
 
 def fetch_page(page, page_size=100):
     """Fetch a single page of servers"""

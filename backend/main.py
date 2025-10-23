@@ -443,10 +443,10 @@ async def startup_event():
     from database import create_tables
     create_tables()
     
-    # Fetch Smithery servers on startup
+    # Initialize Smithery MCPs using the new curated system
     global SMITHERY_MCPS
-    SMITHERY_MCPS = await fetch_smithery_servers()
-    print(f"Loaded {len(SMITHERY_MCPS)} Smithery MCP servers")  # Creates tables if they don't exist
+    SMITHERY_MCPS = get_smithery_mcps_cached()
+    print(f"Loaded {len(SMITHERY_MCPS)} curated Smithery MCP servers")
 
 
 # Routes
@@ -879,9 +879,13 @@ async def get_smithery_mcp_url(
     # Use the optimized Smithery integration with caching
     smithery_mcps = get_smithery_mcps_cached()
     
+    # Check if we have any curated MCPs
+    if not smithery_mcps:
+        raise HTTPException(status_code=503, detail="Smithery MCPs are currently unavailable. Please try again later.")
+    
     # Check if MCP exists
     if mcp_id not in smithery_mcps:
-        raise HTTPException(status_code=400, detail="Invalid MCP ID")
+        raise HTTPException(status_code=404, detail=f"MCP ID '{mcp_id}' not found in curated list")
     
     mcp_info = smithery_mcps[mcp_id]
     return {

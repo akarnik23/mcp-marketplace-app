@@ -35,8 +35,11 @@ def get_smithery_mcps_cached() -> Dict[str, Any]:
             if cache_age_hours < CACHE_HOURS:
                 with open(CACHE_FILE, 'r') as f:
                     servers = json.load(f)
-                    print(f"Using cached Smithery data ({len(servers)} servers, {cache_age_hours:.1f}h old)")
-                    return _get_curated_mcps(servers)
+                    if servers and len(servers) > 0:
+                        print(f"Using cached Smithery data ({len(servers)} servers, {cache_age_hours:.1f}h old)")
+                        return _get_curated_mcps(servers)
+                    else:
+                        print("Cache file exists but is empty, fetching fresh data")
         except Exception as e:
             print(f"Cache error: {e}, fetching fresh data")
     
@@ -49,6 +52,10 @@ def get_smithery_mcps_cached() -> Dict[str, Any]:
         cache_file=CACHE_FILE,
         cache_hours=CACHE_HOURS
     )
+    
+    if not servers or len(servers) == 0:
+        print("Warning: No servers fetched, returning empty curated MCPs")
+        return {}
     
     return _get_curated_mcps(servers)
 
@@ -63,12 +70,14 @@ def _get_curated_mcps(servers: List[Dict]) -> Dict[str, Any]:
         results = search_servers(servers, search_term)
         if results:
             top_result = results[0]  # Get the #1 result
-            mcp_id = top_result.get('qualifiedName', '')
+            qualified_name = top_result.get('qualifiedName', '')
+            # Use the same key format as the old system (last part after /)
+            mcp_id = qualified_name.split("/")[-1] if qualified_name else ''
             if mcp_id and mcp_id not in curated_mcps:  # Avoid duplicates
                 curated_mcps[mcp_id] = {
                     "name": top_result.get('displayName', ''),
                     "description": top_result.get('description', ''),
-                    "smithery_url": f"https://smithery.ai/server/{mcp_id}",
+                    "smithery_url": f"https://smithery.ai/server/{qualified_name}",
                     "homepage": top_result.get('homepage', ''),
                     "verified": top_result.get('verified', False),
                     "use_count": top_result.get('useCount', 0),

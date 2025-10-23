@@ -111,7 +111,7 @@ export default function Home() {
     } finally {
       setDetectingServices(false);
     }
-  }, [detectingServices]);
+  }, []); // Remove detectingServices dependency
 
   const loadDeployments = useCallback(async () => {
     try {
@@ -161,7 +161,7 @@ export default function Home() {
     };
     
     loadDataSequentially();
-  }, [user, loadDeployments]);
+  }, [user]);
 
   const handleGitHubAuth = async () => {
     try {
@@ -233,7 +233,7 @@ export default function Home() {
     setGeneratingSmitheryUrl(mcpId);
     
     try {
-      const response = await apiRequest(`/mcps/smithery/${mcpId}/url`);
+      const response = await apiRequest(`/mcps/smithery/${encodeURIComponent(mcpId)}/url`);
       
       if (!response.ok) {
         const error = await response.json();
@@ -242,10 +242,12 @@ export default function Home() {
       
       const data = await response.json();
       console.log('Smithery URL retrieved:', data);
+      return data;
       
     } catch (error) {
       console.error(`Error getting Smithery URL for ${mcpId}:`, error);
       alert('Failed to get Smithery URL. Please try again.');
+      throw error;
     } finally {
       setGeneratingSmitheryUrl(null);
     }

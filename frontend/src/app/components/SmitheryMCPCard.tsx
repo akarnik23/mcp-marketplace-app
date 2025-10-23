@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
-import Image from 'next/image';
 import { SmitheryMCP } from '../types';
 import { SMITHERY_ICONS } from '../constants';
 
@@ -47,11 +46,9 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
           <div className="flex items-center gap-3">
             {/* Use real icon from Smithery API */}
             {mcp.icon_url ? (
-              <Image 
+              <img 
                 src={mcp.icon_url} 
                 alt="icon" 
-                width={36} 
-                height={36} 
                 className="w-9 h-9 rounded-md" 
               />
             ) : (
