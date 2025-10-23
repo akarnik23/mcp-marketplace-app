@@ -7,7 +7,8 @@ import os
 from datetime import datetime, timedelta
 import json
 from dotenv import load_dotenv
-import concurrent.futures
+# import concurrent.futures  # Removed - using sequential processing
+# import threading  # Removed - not needed
 from render_client import RenderClient, MCP_SERVICE_IDS
 from database import get_db, User, Deployment, APIKey, MCPTemplate, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
@@ -46,6 +47,7 @@ _service_status_cache = {}
 _cache_timestamp = None
 _cache_duration = 30  # 30 seconds cache
 
+
 def get_service_status(service_id: str, service_url: str, render_client: RenderClient) -> str:
     """
     Get the status of a service using hybrid approach (Render API + HTTP check)
@@ -78,12 +80,12 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
             # Deployment is live, but check if service is actually responding
             try:
                 import requests
-                # Try health check endpoint first, then root
-                health_urls = [f"{service_url}/health", f"{service_url}/", service_url]
+                # Try root endpoint first (most likely to respond quickly), then health check
+                health_urls = [service_url, f"{service_url}/", f"{service_url}/health"]
                 
                 for url in health_urls:
                     try:
-                        response = requests.get(url, timeout=3)
+                        response = requests.get(url, timeout=1)  # Reduced from 3 to 1 second
                         if response.status_code in [200, 404, 405]:
                             status = "live"  # Service is awake and responding
                             break
@@ -645,20 +647,13 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Check actual service status using shared function - in parallel for speed
-                def check_service_status(service):
+                # Check service status sequentially to avoid multithreading issues
+                for service in mcp_services:
                     status = get_service_status(service["id"], service["url"], render_client)
                     # Convert status to more user-friendly terms
                     if status == "error":
                         status = "sleeping"  # Most "errors" are actually sleeping services
                     service["status"] = status
-                    return service
-                
-                # Use ThreadPoolExecutor to check services in parallel
-                # Limit to 2 workers to avoid overwhelming free tier
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                    futures = [executor.submit(check_service_status, service) for service in mcp_services]
-                    mcp_services = [future.result() for future in futures]
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {
@@ -841,6 +836,7 @@ async def validate_render_key(request: ValidateRenderKeyRequest):
         return {"valid": True, "service_count": len(services)}
     except Exception as e:
         return {"valid": False, "error": str(e)}
+
 
 class SmitheryMCPRequest(BaseModel):
     mcp_id: str

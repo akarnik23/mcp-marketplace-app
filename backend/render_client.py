@@ -118,7 +118,6 @@ class RenderClient:
                 return {"status": "deploying"}
                 
         except Exception as e:
-            print(f"Error getting service status: {e}")
             return None
 
     def get_latest_deployment_status(self, service_id: str) -> Dict[str, Any]:
@@ -126,11 +125,15 @@ class RenderClient:
         try:
             response = requests.get(
                 f"{self.base_url}/services/{service_id}/deploys",
-                headers=self.headers
+                headers=self.headers,
+                timeout=10
             )
+            
+            if response.status_code == 404:
+                return {"status": "unknown"}
+            
             response.raise_for_status()
             deployments = response.json()
-            
             
             if deployments and len(deployments) > 0:
                 latest_deployment = deployments[0]  # Most recent deployment
@@ -145,8 +148,9 @@ class RenderClient:
             else:
                 return {"status": "unknown"}
                 
+        except requests.exceptions.RequestException as e:
+            return None
         except Exception as e:
-            print(f"Error getting deployment status: {e}")
             return None
     
     def delete_service(self, service_id: str) -> bool:
