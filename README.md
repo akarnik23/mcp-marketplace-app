@@ -1,14 +1,15 @@
 # MCP Marketplace
 
-A production-ready marketplace for deploying Model Context Protocol (MCP) servers to Render with one-click deployment and environment variable management.
+A production-ready marketplace for Model Context Protocol (MCP) servers with both self-hosted deployment and pre-hosted Smithery integrations. Built for The Interaction Company.
 
 ## Features
 
 - 🔐 **GitHub OAuth Authentication** - Secure user authentication
 - 🚀 **One-Click Deployment** - Deploy MCPs to your Render account
+- 🌐 **Smithery Integration** - Pre-hosted MCPs ready to connect to Poke
 - 🔑 **API Key Management** - Secure encrypted storage of user API keys
 - 🌐 **Environment Variables** - Easy configuration of MCP environment variables
-- 📊 **User Dashboard** - View and manage your deployments
+- ⚡ **Performance Optimized** - Parallel processing and caching for fast loading
 - 🔒 **Production Ready** - PostgreSQL database, encrypted storage, JWT tokens
 
 ## Architecture
@@ -16,17 +17,21 @@ A production-ready marketplace for deploying Model Context Protocol (MCP) server
 ### Backend (`/backend`)
 - **FastAPI** - Modern Python web framework
 - **PostgreSQL** - Production database with UUID primary keys
-- **SQLAlchemy** - ORM with proper relationships
+- **SQLAlchemy** - ORM with proper relationships and connection pooling
 - **JWT Authentication** - Secure token-based auth
 - **Encryption** - Fernet encryption for sensitive data
 - **Render API Integration** - Deploy and manage MCP services
+- **Smithery API Integration** - Dynamic MCP discovery and curation
+- **Performance Caching** - In-memory caching for API calls and service status
+- **Parallel Processing** - Concurrent service status checks
 
 ### Frontend (`/frontend`)
 - **Next.js** - React framework with TypeScript
-- **Tailwind CSS** - Modern styling
+- **Tailwind CSS** - Modern styling with dramatic gradients
 - **GitHub OAuth** - User authentication flow
-- **Environment Variables UI** - Collapsible API key configuration
-- **Settings Page** - User management and deployment viewing
+- **Environment Variables UI** - Professional API key management
+- **Smithery MCP Cards** - Pre-hosted MCP integration
+- **Performance Optimized** - Sequential loading to prevent connection bottlenecks
 
 ## Quick Start
 
@@ -83,6 +88,7 @@ A production-ready marketplace for deploying Model Context Protocol (MCP) server
 - `JWT_SECRET_KEY` - Secret for JWT token signing
 - `ENCRYPTION_KEY` - Fernet key for encrypting user data
 - `FRONTEND_URL` - Frontend URL for CORS
+- `SMITHERY_API_KEY` - Smithery Registry API key for MCP discovery
 
 ### Frontend
 - `NEXT_PUBLIC_API_URL` - Backend API URL
@@ -96,17 +102,27 @@ A production-ready marketplace for deploying Model Context Protocol (MCP) server
 - `GET /mcps/templates` - List available MCP templates
 - `POST /mcps/detect-services` - Detect user's Render services
 - `POST /mcps/deploy` - Deploy MCP with environment variables
-- `GET /mcps/deployed` - Get user's deployments
 - `POST /render/validate-key` - Validate Render API key
+- `GET /mcps/smithery` - Get curated Smithery MCPs
+- `GET /mcps/smithery/{mcp_id}/url` - Get Smithery MCP URL
 
-## MCP Templates
+## MCP Types
 
+### Self-Hosted MCPs (Deploy to Render)
 - **News MCP** - RSS feeds and headlines
 - **Weather MCP** - Weather data and forecasts
 - **GitHub MCP** - Repository and issue management
 - **Reddit MCP** - Posts and search functionality
 - **Spotify MCP** - Music search and artist data
 - **HackerNews MCP** - Stories and search
+
+### Smithery MCPs (Pre-hosted)
+- **Dynamic Discovery** - Curated from Smithery Registry
+- **Popular MCPs** - Notion, Gmail, Slack, Google Drive, Calendar
+- **Development Tools** - GitHub, Linear, Figma, Jira
+- **Search & Research** - Exa, DeepWiki, Semantic Scholar
+- **Database & Memory** - Supabase, Mem0, SuperMemory
+- **Communication** - Discord, Twitter, Slack integrations
 
 ## Security
 

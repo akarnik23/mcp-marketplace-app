@@ -103,7 +103,6 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
         status = "sleeping"  # If we can't get deployment status, assume sleeping
     
     # Cache the result
-    global _service_status_cache, _cache_timestamp
     _service_status_cache[cache_key] = status
     _cache_timestamp = current_time
     
@@ -154,6 +153,7 @@ MCP_TEMPLATES = {
 SMITHERY_MCPS = {}
 SMITHERY_CACHE_TIMESTAMP = None
 SMITHERY_CACHE_DURATION = 3600  # 1 hour cache
+
 
 # Poke-relevant criteria for curating high-quality MCPs
 POKE_RELEVANT_CRITERIA = {
@@ -644,13 +644,23 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Check actual service status using shared function
-                for service in mcp_services:
+                # Check actual service status using shared function - in parallel for speed
+                import asyncio
+                import concurrent.futures
+                
+                def check_service_status(service):
                     status = get_service_status(service["id"], service["url"], render_client)
                     # Convert status to more user-friendly terms
                     if status == "error":
                         status = "sleeping"  # Most "errors" are actually sleeping services
                     service["status"] = status
+                    return service
+                
+                # Use ThreadPoolExecutor to check services in parallel
+                # Limit to 2 workers to avoid overwhelming free tier
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = [executor.submit(check_service_status, service) for service in mcp_services]
+                    mcp_services = [future.result() for future in futures]
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {

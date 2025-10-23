@@ -378,7 +378,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen text-white" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 25%, #203a54 50%, #1a202c 75%, #000000 100%)' }}>
+    <div className="min-h-screen text-white" style={{ background: 'linear-gradient(to bottom, #203a54, #000000)' }}>
       {/* Header */}
       <header className="backdrop-blur border-b" style={{ background: 'rgba(32,58,84,0.7)', borderColor: '#718392' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
