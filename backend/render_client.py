@@ -176,8 +176,6 @@ class RenderClient:
                         "value": str(value)
                     })
             
-            print(f"Final env_vars_list being sent to Render: {[(item['key'], item['value'][:4] if item['value'] else None) for item in env_vars_list]}")
-            
             # Prepare the JSON payload - try different formats
             # Format 1: With envVars wrapper
             payload1 = {"envVars": env_vars_list}

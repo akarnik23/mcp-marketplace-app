@@ -721,25 +721,16 @@ async def update_deployment_env_vars(
     # Update Render if API key provided
     if render_api_key and deployment.render_service_id:
         try:
-            print(f"Updating Render service {deployment.render_service_id} with env vars: {list(env_vars.keys())}")
-            print(f"Env var values (first 4 chars): {[(k, v[:4] if v else None) for k, v in env_vars.items()]}")
-            
             render_client = RenderClient(render_api_key)
             render_client.update_service_env_vars(deployment.render_service_id, env_vars)
-            print(f"Render env vars updated successfully")
-            
-            print(f"Restarting service {deployment.render_service_id}")
             render_client.restart_service(deployment.render_service_id)
-            print(f"Service restarted successfully")
         except Exception as e:
-            print(f"Failed to update Render: {e}")
             # Continue to update database even if Render update fails
+            pass
     
     # Update database
-    print(f"Saving env vars to DB: {list(env_vars.keys())}")
     for key_name, key_value in env_vars.items():
         if key_value:  # Only store non-empty values
-            print(f"Processing key: {key_name}, has value: {bool(key_value)}")
             # Check if key already exists
             existing_key = db.query(APIKey).filter(
                 APIKey.deployment_id == deployment_id,
@@ -748,10 +739,8 @@ async def update_deployment_env_vars(
             ).first()
             
             if existing_key:
-                print(f"Updating existing key: {key_name}")
                 existing_key.encrypted_value = encrypt_value(key_value)
             else:
-                print(f"Creating new key: {key_name}")
                 api_key = APIKey(
                     user_id=user_id,
                     deployment_id=deployment_id,
@@ -762,7 +751,6 @@ async def update_deployment_env_vars(
                 db.add(api_key)
     
     db.commit()
-    print(f"DB commit successful for {len(env_vars)} keys")
     
     return {"message": "Environment variables updated successfully"}
 
@@ -793,15 +781,10 @@ async def update_service_env_vars(
         render_client = RenderClient(request.render_api_key)
         
         # Update env vars via Render API
-        print(f"Updating Render service {service_id} with env vars: {list(request.env_vars.keys())}")
-        print(f"Env var values (first 4 chars): {[(k, v[:4] if v else None) for k, v in request.env_vars.items()]}")
         render_client.update_service_env_vars(service_id, request.env_vars)
-        print(f"Render env vars updated successfully")
         
         # Restart service to apply changes
-        print(f"Restarting service {service_id}")
         render_client.restart_service(service_id)
-        print(f"Service restarted successfully")
         
         # Try to find or create a deployment record to store env vars
         deployment = db.query(Deployment).filter(
@@ -811,7 +794,6 @@ async def update_service_env_vars(
         
         if not deployment:
             # Create a new deployment record for this service
-            print(f"Creating new deployment record for service_id: {service_id}")
             try:
                 service_info = render_client.get_service(service_id)
                 service_url = service_info.get("service", {}).get("serviceDetails", {}).get("url", "")
@@ -834,16 +816,13 @@ async def update_service_env_vars(
                 db.add(deployment)
                 db.commit()
                 db.refresh(deployment)
-                print(f"Created deployment record: {deployment.id}")
-            except Exception as e:
-                print(f"Failed to create deployment record: {e}")
+            except Exception:
                 # Continue anyway - at least Render got updated
+                pass
         
         if deployment:
             # Update env vars in database for this deployment
-            print(f"Saving env vars to DB: {list(request.env_vars.keys())}")
             for key_name, key_value in request.env_vars.items():
-                print(f"Processing key: {key_name}, has value: {bool(key_value)}")
                 if key_value:
                     # Check if key exists
                     existing_key = db.query(APIKey).filter(
@@ -853,10 +832,8 @@ async def update_service_env_vars(
                     ).first()
                     
                     if existing_key:
-                        print(f"Updating existing key: {key_name}")
                         existing_key.encrypted_value = encrypt_value(key_value)
                     else:
-                        print(f"Creating new key: {key_name}")
                         api_key = APIKey(
                             user_id=user_id,
                             deployment_id=deployment.id,
@@ -867,7 +844,6 @@ async def update_service_env_vars(
                         db.add(api_key)
             
             db.commit()
-            print(f"DB commit successful for {len(request.env_vars)} keys")
         
         return {"message": "Environment variables updated successfully"}
         

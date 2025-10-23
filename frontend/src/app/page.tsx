@@ -290,7 +290,6 @@ export default function Home() {
         if (deployment?.deployment_id) {
           await loadMaskedEnvVars(deployment.deployment_id, templateKey);
         }
-        alert('Environment variables updated successfully!');
         await loadDeployments(); // Refresh deployment status
       } else {
         const errorData = await response.json();
