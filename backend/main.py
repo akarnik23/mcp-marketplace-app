@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import json
 from dotenv import load_dotenv
 import concurrent.futures
+import requests
 from render_client import RenderClient, MCP_SERVICE_IDS
 from database import get_db, User, Deployment, APIKey, MCPTemplate, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
@@ -65,7 +66,6 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
         elif render_status == "live":
             # Deployment is live, but check if service is actually responding
             try:
-                import requests
                 # Try root endpoint first (most likely to respond quickly), then health check
                 health_urls = [service_url, f"{service_url}/", f"{service_url}/health"]
                 
@@ -639,7 +639,7 @@ async def detect_user_services(
                     })
             
             if mcp_services:
-                # Test: Try multithreading again (caching is disabled)
+                # Parallel service status checking (caching disabled)
                 def check_service_status(service):
                     status = get_service_status(service["id"], service["url"], render_client)
                     # Convert status to more user-friendly terms
@@ -649,10 +649,25 @@ async def detect_user_services(
                     return service
                 
                 # Use ThreadPoolExecutor to check services in parallel
-                # Limit to 2 workers to avoid overwhelming free tier
-                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                # Limit to 3 workers for better performance while staying safe
+                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                     futures = [executor.submit(check_service_status, service) for service in mcp_services]
-                    mcp_services = [future.result() for future in futures]
+                    # Handle potential failures gracefully
+                    completed_services = []
+                    for future in futures:
+                        try:
+                            result = future.result()
+                            completed_services.append(result)
+                        except Exception as e:
+                            # If a service check fails, mark it as error but continue
+                            print(f"Service check failed: {e}")
+                            # Find the original service and mark as error
+                            for service in mcp_services:
+                                if service not in completed_services:
+                                    service["status"] = "error"
+                                    completed_services.append(service)
+                                    break
+                    mcp_services = completed_services
                 
                 # User has this MCP set up
                 detected_mcps[template_id] = {

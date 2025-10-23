@@ -126,7 +126,7 @@ class RenderClient:
             response = requests.get(
                 f"{self.base_url}/services/{service_id}/deploys",
                 headers=self.headers,
-                timeout=10
+                timeout=3
             )
             
             if response.status_code == 404:
