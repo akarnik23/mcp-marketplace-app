@@ -567,7 +567,7 @@ async def get_smithery_mcp_url(
     mcp_id: str,
     authorization: str = Header(None, alias="Authorization")
 ):
-    """Get the Smithery MCP URL for direct connection - credentials handled by Smithery"""
+    """Get the Smithery MCP URL for direct connection - works with any MCP ID"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
@@ -578,29 +578,61 @@ async def get_smithery_mcp_url(
     except HTTPException:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    # Use the optimized Smithery integration with caching
+    # First try curated MCPs
     smithery_mcps = get_smithery_mcps_cached()
+    if smithery_mcps and mcp_id in smithery_mcps:
+        mcp_info = smithery_mcps[mcp_id]
+        return {
+            "mcp_id": mcp_id,
+            "smithery_url": mcp_info["smithery_url"],
+            "name": mcp_info["name"],
+            "description": mcp_info["description"],
+            "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
+            "poke_settings_url": "https://poke.com/settings/connections",
+            "smithery_info_url": mcp_info.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
+            "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
+            "verified": mcp_info.get("verified", False),
+            "use_count": mcp_info.get("use_count", 0)
+        }
     
-    # Check if we have any curated MCPs
-    if not smithery_mcps:
-        raise HTTPException(status_code=503, detail="Smithery MCPs are currently unavailable. Please try again later.")
+    # If not in curated list, search for the MCP in the full cache
+    try:
+        from smithery_integration import search_smithery_mcps
+        # Search for the exact MCP ID
+        search_results = search_smithery_mcps(mcp_id, limit=1)
+        if search_results and len(search_results) > 0:
+            mcp_data = search_results[0]
+            return {
+                "mcp_id": mcp_id,
+                "smithery_url": mcp_data["smithery_url"],
+                "name": mcp_data["name"],
+                "description": mcp_data["description"],
+                "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
+                "poke_settings_url": "https://poke.com/settings/connections",
+                "smithery_info_url": mcp_data.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
+                "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
+                "verified": mcp_data.get("verified", False),
+                "use_count": mcp_data.get("use_count", 0)
+            }
+    except Exception as e:
+        # If search fails, fall back to generic URL
+        pass
     
-    # Check if MCP exists
-    if mcp_id not in smithery_mcps:
-        raise HTTPException(status_code=404, detail=f"MCP ID '{mcp_id}' not found in curated list")
+    # Final fallback: construct generic URL
+    # Handle different formats like "espn-mcp" -> "espn" or keep as-is
+    clean_mcp_id = mcp_id.replace("-mcp", "") if mcp_id.endswith("-mcp") else mcp_id
     
-    mcp_info = smithery_mcps[mcp_id]
     return {
         "mcp_id": mcp_id,
-        "smithery_url": mcp_info["smithery_url"],
-        "name": mcp_info["name"],
-        "description": mcp_info["description"],
+        "smithery_url": f"https://smithery.ai/server/{clean_mcp_id}",
+        "name": mcp_id.replace("-", " ").title(),
+        "description": f"MCP server for {clean_mcp_id}",
         "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
         "poke_settings_url": "https://poke.com/settings/connections",
-        "smithery_info_url": mcp_info.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
+        "smithery_info_url": f"https://smithery.ai/server/{clean_mcp_id}",
         "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
-        "verified": mcp_info.get("verified", False),
-        "use_count": mcp_info.get("use_count", 0)
+        "verified": False,
+        "use_count": 0
     }
 
 if __name__ == "__main__":

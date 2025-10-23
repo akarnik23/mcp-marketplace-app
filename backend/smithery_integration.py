@@ -14,9 +14,9 @@ CACHE_HOURS = 24
 
 # Curated list of high-quality MCPs to display
 CURATED_MCP_SEARCHES = [
-    "github", "notion", "linear", "calendar", "gmail", "slack", "discord", 
-    "email", "meeting", "task", "todo", "desktop commander", "automation", "workflow",
-    "google maps", "zoom", "outlook", "telegram", "reporting", "todoist", "whatsapp", 
+    "github", "notion", "linear", "google calendar", "gmail", "slack", "discord", 
+    "email", "google meet", "task", "todoist", "desktop commander", "automation", "workflow",
+    "google maps", "zoom", "outlook", "telegram", "todoist", "whatsapp", 
     "web", "memory", "news", "weather", "crypto", "stock", "perplexity", 
     "exa", "brave", "supabase", "paypal", "arxiv"
 ]
@@ -71,9 +71,14 @@ def _get_curated_mcps(servers: List[Dict]) -> Dict[str, Any]:
             # Use the same key format as the old system (last part after /)
             mcp_id = qualified_name.split("/")[-1] if qualified_name else ''
             if mcp_id and mcp_id not in curated_mcps:  # Avoid duplicates
+                # Truncate description to 200 characters
+                description = top_result.get('description', '')
+                if len(description) > 200:
+                    description = description[:197] + "..."
+                
                 curated_mcps[mcp_id] = {
                     "name": top_result.get('displayName', ''),
-                    "description": top_result.get('description', ''),
+                    "description": description,
                     "smithery_url": f"https://smithery.ai/server/{qualified_name}",
                     "homepage": top_result.get('homepage', ''),
                     "verified": top_result.get('verified', False),
@@ -106,10 +111,16 @@ def search_smithery_mcps(query: str, limit: int = 20) -> List[Dict[str, Any]]:
         qualified_name = server.get('qualifiedName', '')
         # Use the same simple format as curated MCPs
         mcp_id = qualified_name.split("/")[-1] if qualified_name else ''
+        
+        # Truncate description to 200 characters
+        description = server.get('description', '')
+        if len(description) > 200:
+            description = description[:197] + "..."
+        
         formatted_results.append({
             "mcp_id": mcp_id,
             "name": server.get('displayName', ''),
-            "description": server.get('description', ''),
+            "description": description,
             "smithery_url": f"https://smithery.ai/server/{qualified_name}",
             "homepage": server.get('homepage', ''),
             "verified": server.get('verified', False),
