@@ -783,6 +783,36 @@ async def update_service_env_vars(
             Deployment.render_service_id == service_id
         ).first()
         
+        if not deployment:
+            # Create a new deployment record for this service
+            print(f"Creating new deployment record for service_id: {service_id}")
+            try:
+                service_info = render_client.get_service(service_id)
+                service_url = service_info.get("service", {}).get("serviceDetails", {}).get("url", "")
+                
+                # Determine template_id from service name
+                service_name = service_info.get("service", {}).get("name", "").lower()
+                template_id = "news"  # default
+                for tid in ["news", "weather", "github", "reddit", "spotify", "hackernews"]:
+                    if tid in service_name:
+                        template_id = tid
+                        break
+                
+                deployment = Deployment(
+                    user_id=user_id,
+                    template_id=template_id,
+                    render_service_id=service_id,
+                    status="live",
+                    deployment_url=service_url
+                )
+                db.add(deployment)
+                db.commit()
+                db.refresh(deployment)
+                print(f"Created deployment record: {deployment.id}")
+            except Exception as e:
+                print(f"Failed to create deployment record: {e}")
+                # Continue anyway - at least Render got updated
+        
         if deployment:
             # Update env vars in database for this deployment
             print(f"Saving env vars to DB: {list(request.env_vars.keys())}")
@@ -812,8 +842,6 @@ async def update_service_env_vars(
             
             db.commit()
             print(f"DB commit successful for {len(request.env_vars)} keys")
-        else:
-            print(f"No deployment found for service_id: {service_id}")
         
         return {"message": "Environment variables updated successfully"}
         
