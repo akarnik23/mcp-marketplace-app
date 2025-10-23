@@ -17,6 +17,7 @@ interface MCPCardProps {
   showEnvVars: boolean;
   onUpdateEnvVar: (templateKey: string, keyName: string, value: string) => void;
   getEnvVarValue: (templateKey: string, keyName: string) => string;
+  onUpdateDeploymentEnvVars?: (deploymentId: string, templateKey: string) => void;
 }
 
 export const MCPCard = ({
@@ -29,7 +30,8 @@ export const MCPCard = ({
   onToggleEnvVars,
   showEnvVars,
   onUpdateEnvVar,
-  getEnvVarValue
+  getEnvVarValue,
+  onUpdateDeploymentEnvVars
 }: MCPCardProps) => {
   const [localCopiedUrl, setLocalCopiedUrl] = useState<string>('');
 
@@ -177,6 +179,20 @@ export const MCPCard = ({
                       />
                     </div>
                   ))}
+                  
+                  {/* Update Environment Variables Button - only show for deployed MCPs */}
+                  {deployment?.deployment_id && onUpdateDeploymentEnvVars && (
+                    <div className="mt-4">
+                      <button
+                        onClick={() => onUpdateDeploymentEnvVars(deployment.deployment_id!, templateKey)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium active:scale-95 transition-all cursor-pointer"
+                        style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
+                      >
+                        <Wrench className="w-4 h-4" />
+                        Update Environment Variables
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

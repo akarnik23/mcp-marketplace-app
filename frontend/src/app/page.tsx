@@ -241,6 +241,35 @@ export default function Home() {
     }
   };
 
+  const updateDeploymentEnvVars = async (deploymentId: string, templateKey: string) => {
+    try {
+      const envVarsToUpdate = envVars[templateKey] || {};
+      // Filter out masked values (don't send them to backend)
+      const filteredEnvVars = Object.fromEntries(
+        Object.entries(envVarsToUpdate).filter(([key, value]) => 
+          value && !value.includes('••••')
+        )
+      );
+      
+      const response = await apiRequest(`/mcps/deployments/${deploymentId}/env-vars`, {
+        method: 'POST',
+        body: JSON.stringify({ env_vars: filteredEnvVars })
+      });
+      
+      if (response.ok) {
+        // Reload masked values to show updated state
+        await loadMaskedEnvVars(deploymentId, templateKey);
+        alert('Environment variables updated successfully!');
+      } else {
+        const errorData = await response.json();
+        alert(`Error updating environment variables: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error updating env vars:', error);
+      alert('Error updating environment variables');
+    }
+  };
+
   const getTimeAgo = (date: Date): string => {
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -697,6 +726,7 @@ export default function Home() {
                       showEnvVars={showEnvVars[templateKey] || false}
                       onUpdateEnvVar={updateEnvVar}
                       getEnvVarValue={getEnvVarValue}
+                      onUpdateDeploymentEnvVars={updateDeploymentEnvVars}
                     />
                   );
                 })}

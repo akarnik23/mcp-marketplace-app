@@ -686,6 +686,64 @@ async def get_deployment_env_vars(
     
     return {"env_vars": masked_vars}
 
+@app.post("/mcps/deployments/{deployment_id}/env-vars")
+async def update_deployment_env_vars(
+    deployment_id: str,
+    request: dict,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Update environment variables for a deployment"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get deployment
+    deployment = db.query(Deployment).filter(
+        Deployment.id == deployment_id,
+        Deployment.user_id == user_id
+    ).first()
+    
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+    
+    # Get env vars from request
+    env_vars = request.get("env_vars", {})
+    
+    # Update or create API keys
+    for key_name, key_value in env_vars.items():
+        if key_value:  # Only store non-empty values
+            # Check if key already exists
+            existing_key = db.query(APIKey).filter(
+                APIKey.deployment_id == deployment_id,
+                APIKey.key_name == key_name,
+                APIKey.key_type == "mcp_env_var"
+            ).first()
+            
+            if existing_key:
+                # Update existing key
+                existing_key.encrypted_value = encrypt_value(key_value)
+            else:
+                # Create new key
+                api_key = APIKey(
+                    user_id=user_id,
+                    deployment_id=deployment_id,
+                    key_name=key_name,
+                    key_type="mcp_env_var",
+                    encrypted_value=encrypt_value(key_value)
+                )
+                db.add(api_key)
+    
+    db.commit()
+    
+    return {"message": "Environment variables updated successfully"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
