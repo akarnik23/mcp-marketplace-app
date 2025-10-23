@@ -314,8 +314,9 @@ async def detect_user_services(
             "hackernews": ["hackernews-mcp", "mcp-hackernews"]
         }
         
+        # First pass: Collect all services by template
+        template_services = {}
         for template_id, template_info in MCP_TEMPLATES.items():
-            # Look for services that match our MCP naming pattern
             mcp_services = []
             expected_names = mcp_service_mappings.get(template_id, [])
             
@@ -331,48 +332,58 @@ async def detect_user_services(
                         "id": service.get("id"),
                         "name": service.get("name"),
                         "url": service_url,
-                        "status": "unknown"
+                        "status": "unknown",
+                        "template_id": template_id  # Track which template this belongs to
                     })
             
+            template_services[template_id] = mcp_services
+        
+        # Second pass: Check ALL services in parallel (not per-template)
+        all_services = []
+        for services_list in template_services.values():
+            all_services.extend(services_list)
+        
+        if all_services:
+            def check_service_status(service):
+                status = get_service_status(service["id"], service["url"], render_client)
+                # Convert status to more user-friendly terms
+                if status == "error":
+                    status = "sleeping"  # Most "errors" are actually sleeping services
+                service["status"] = status
+                return service
+            
+            # Check all services in parallel with 6 workers
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                futures = [executor.submit(check_service_status, service) for service in all_services]
+                completed_services = []
+                for future in futures:
+                    try:
+                        result = future.result()
+                        completed_services.append(result)
+                    except Exception as e:
+                        print(f"Service check failed: {e}")
+                
+                # Group services back by template_id
+                services_by_template = {}
+                for service in completed_services:
+                    template_id = service.pop("template_id")  # Remove template_id before returning
+                    if template_id not in services_by_template:
+                        services_by_template[template_id] = []
+                    services_by_template[template_id].append(service)
+        else:
+            services_by_template = {}
+        
+        # Third pass: Build detected_mcps with status-checked services
+        for template_id, template_info in MCP_TEMPLATES.items():
+            mcp_services = services_by_template.get(template_id, [])
+            
             if mcp_services:
-                # Parallel service status checking (caching disabled)
-                def check_service_status(service):
-                    status = get_service_status(service["id"], service["url"], render_client)
-                    # Convert status to more user-friendly terms
-                    if status == "error":
-                        status = "sleeping"  # Most "errors" are actually sleeping services
-                    service["status"] = status
-                    return service
-                
-                # Use ThreadPoolExecutor to check services in parallel
-                # Use 6 workers (one per service) for fast parallel status checks
-                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                    futures = [executor.submit(check_service_status, service) for service in mcp_services]
-                    # Handle potential failures gracefully
-                    completed_services = []
-                    for future in futures:
-                        try:
-                            result = future.result()
-                            completed_services.append(result)
-                        except Exception as e:
-                            # If a service check fails, mark it as error but continue
-                            print(f"Service check failed: {e}")
-                            # Find the original service and mark as error
-                            for service in mcp_services:
-                                if service not in completed_services:
-                                    service["status"] = "error"
-                                    completed_services.append(service)
-                                    break
-                    mcp_services = completed_services
-                
-                # User has this MCP set up
                 detected_mcps[template_id] = {
                     "available": True,
                     "services": mcp_services,
                     "template": template_info
                 }
             else:
-                # User doesn't have this MCP set up
                 detected_mcps[template_id] = {
                     "available": False,
                     "services": [],
@@ -765,6 +776,37 @@ async def update_service_env_vars(
         
         # Restart service to apply changes
         render_client.restart_service(service_id)
+        
+        # Try to find or create a deployment record to store env vars
+        deployment = db.query(Deployment).filter(
+            Deployment.user_id == user_id,
+            Deployment.render_service_id == service_id
+        ).first()
+        
+        if deployment:
+            # Update env vars in database for this deployment
+            for key_name, key_value in request.env_vars.items():
+                if key_value:
+                    # Check if key exists
+                    existing_key = db.query(APIKey).filter(
+                        APIKey.deployment_id == deployment.id,
+                        APIKey.key_name == key_name,
+                        APIKey.key_type == "mcp_env_var"
+                    ).first()
+                    
+                    if existing_key:
+                        existing_key.encrypted_value = encrypt_value(key_value)
+                    else:
+                        api_key = APIKey(
+                            user_id=user_id,
+                            deployment_id=deployment.id,
+                            key_name=key_name,
+                            key_type="mcp_env_var",
+                            encrypted_value=encrypt_value(key_value)
+                        )
+                        db.add(api_key)
+            
+            db.commit()
         
         return {"message": "Environment variables updated successfully"}
         
