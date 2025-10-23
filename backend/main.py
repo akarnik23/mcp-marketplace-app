@@ -42,10 +42,7 @@ GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/au
 # Render API settings - now using user-provided keys only
 # RENDER_API_KEY = os.getenv("RENDER_API_KEY", "your_render_api_key")  # Removed - using user-provided keys
 
-# Cache service status to avoid repeated checks
-_service_status_cache = {}
-_cache_timestamp = None
-_cache_duration = 30  # 30 seconds cache
+# Cache disabled - was causing 500 errors
 
 
 def get_service_status(service_id: str, service_url: str, render_client: RenderClient) -> str:
@@ -53,16 +50,6 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
     Get the status of a service using hybrid approach (Render API + HTTP check)
     Returns: 'live', 'sleeping', 'deploying', or 'error'
     """
-    import time
-    
-    # Check cache first
-    current_time = time.time()
-    cache_key = f"{service_id}_{service_url}"
-    
-    if (_cache_timestamp and 
-        current_time - _cache_timestamp < _cache_duration and 
-        cache_key in _service_status_cache):
-        return _service_status_cache[cache_key]
     
     try:
         # First check deployment status from Render API
@@ -105,9 +92,6 @@ def get_service_status(service_id: str, service_url: str, render_client: RenderC
     except Exception:
         status = "sleeping"  # If we can't get deployment status, assume sleeping
     
-    # Cache the result
-    _service_status_cache[cache_key] = status
-    _cache_timestamp = current_time
     
     return status
 
