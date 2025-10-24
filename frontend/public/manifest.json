@@ -1,0 +1,19 @@
+{
+  "name": "Poke MCP Marketplace",
+  "short_name": "Poke MCP",
+  "description": "Browse MCP servers - self-hosted or pre-hosted Smithery servers for Poke integration",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1929",
+  "theme_color": "#0a1929",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Wrench, ExternalLink, Github } from 'lucide-react';
+import { Zap, Wrench, ExternalLink, Github, Check } from 'lucide-react';
 import Image from 'next/image';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars, SmitheryMCP } from './types';
 import { ERROR_MESSAGES, MCP_ICONS } from './constants';
@@ -29,6 +29,7 @@ export default function Home() {
   const [envVars, setEnvVars] = useState<EnvVars>({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [generatingSmitheryUrl, setGeneratingSmitheryUrl] = useState<string | null>(null);
+  const [envVarsUpdatedSuccess, setEnvVarsUpdatedSuccess] = useState<Record<string, boolean>>({});
   
   // Smithery search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -285,6 +286,14 @@ export default function Home() {
       });
       
       if (response.ok) {
+        // Show success checkmark
+        setEnvVarsUpdatedSuccess(prev => ({ ...prev, [templateKey]: true }));
+        
+        // Hide checkmark after 3 seconds
+        setTimeout(() => {
+          setEnvVarsUpdatedSuccess(prev => ({ ...prev, [templateKey]: false }));
+        }, 3000);
+        
         // Reload masked values to show updated state (if deployment_id exists)
         const deployment = deployments[templateKey];
         if (deployment?.deployment_id) {
@@ -502,32 +511,32 @@ export default function Home() {
     <div className="min-h-screen text-white" style={{ background: 'linear-gradient(to bottom, #203a54, #000000)' }}>
       {/* Header */}
       <header className="backdrop-blur border-b" style={{ background: 'rgba(32,58,84,0.7)', borderColor: '#718392' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl p-2" style={{ background: '#203a54', border: '1px solid #718392' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="rounded-xl p-1.5 sm:p-2" style={{ background: '#203a54', border: '1px solid #718392' }}>
                 <Image 
                   src="/interaction-palm.png" 
                   alt="Interaction Palm" 
-                  width={32} 
-                  height={32}
-                  className="w-8 h-8"
+                  width={24} 
+                  height={24}
+                  className="w-6 h-6 sm:w-8 sm:h-8"
                 />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-white">MCP Marketplace</h1>
-                <p className="mt-1" style={{ color: '#718392' }}>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">MCP Marketplace</h1>
+                <p className="text-xs sm:text-sm mt-0.5 sm:mt-1" style={{ color: '#718392' }}>
                   {user ? `Welcome back, ${user.username}!` : 'Hosted integrations for Poke'}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 self-end sm:self-auto">
               {user ? (
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-white">@{user.username}</span>
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <span className="text-xs sm:text-sm font-medium text-white">@{user.username}</span>
                   <button
                     onClick={logout}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
                     style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
                   >
                     Logout
@@ -536,11 +545,12 @@ export default function Home() {
               ) : (
                 <button
                   onClick={handleGitHubAuth}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-sm sm:text-base font-semibold transition-all cursor-pointer"
                   style={{ background: '#ffffff', color: '#203a54' }}
                 >
-                  <Github className="w-4 h-4" />
-                  Sign in with GitHub
+                  <Github className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Sign in with GitHub</span>
+                  <span className="sm:hidden">Sign in</span>
                 </button>
               )}
             </div>
@@ -569,30 +579,30 @@ export default function Home() {
       {/* API Key Management */}
       {user && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="rounded-2xl shadow-lg border p-6" style={{ background: '#203a54', borderColor: '#718392' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg p-2" style={{ background: '#000000', border: '1px solid #718392' }}>
-                  <Wrench className="w-5 h-5 text-white" />
+          <div className="rounded-2xl shadow-lg border p-4 sm:p-6" style={{ background: '#203a54', borderColor: '#718392' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="rounded-lg p-1.5 sm:p-2" style={{ background: '#000000', border: '1px solid #718392' }}>
+                  <Wrench className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Render API Key</h3>
-                  <p className="text-sm" style={{ color: '#718392' }}>Required for deploying MCPs to your Render account</p>
+                  <h3 className="text-base sm:text-lg font-semibold text-white">Render API Key</h3>
+                  <p className="text-xs sm:text-sm" style={{ color: '#718392' }}>Required for deploying MCPs to your Render account</p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 self-end sm:self-auto">
                 {renderApiKey ? (
                   <>
                     <button
                       onClick={() => setShowApiKeyInput(true)}
-                      className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
                       style={{ background: '#ffffff', color: '#203a54', border: '1px solid #718392' }}
                     >
                       Change Key
                     </button>
                     <button
                       onClick={handleClearApiKey}
-                      className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
                       style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
                     >
                       Clear Key
@@ -601,7 +611,7 @@ export default function Home() {
                 ) : (
                   <button
                     onClick={() => setShowApiKeyInput(true)}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                    className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
                     style={{ background: '#ffffff', color: '#203a54', border: '1px solid #718392' }}
                   >
                     Add API Key
@@ -629,37 +639,39 @@ export default function Home() {
             
             {showApiKeyInput && (
               <div className="space-y-3">
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="password"
                     value={newApiKey}
                     onChange={(e) => setNewApiKey(e.target.value)}
                     placeholder="Enter your Render API key"
-                    className="flex-1 px-4 py-3 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white transition-all"
-                    style={{ background: '#000000', border: '1px solid #718392' }}
+                    className="flex-1 px-3 py-2 sm:px-4 sm:py-3 rounded-lg text-base text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white transition-all"
+                    style={{ background: '#000000', border: '1px solid #718392', fontSize: '16px' }}
                   />
-                  <button
-                    onClick={handleUpdateApiKey}
-                    disabled={!newApiKey.trim()}
-                    className="px-6 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ 
-                      background: !newApiKey.trim() ? '#718392' : '#ffffff', 
-                      color: !newApiKey.trim() ? '#ffffff' : '#203a54',
-                      border: '1px solid #718392'
-                    }}
-                  >
-                    Update
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowApiKeyInput(false);
-                      setNewApiKey('');
-                    }}
-                    className="px-6 py-3 rounded-lg text-sm font-medium transition-all cursor-pointer"
-                    style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
-                  >
-                    Cancel
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleUpdateApiKey}
+                      disabled={!newApiKey.trim()}
+                      className="flex-1 sm:flex-none px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ 
+                        background: !newApiKey.trim() ? '#718392' : '#ffffff', 
+                        color: !newApiKey.trim() ? '#ffffff' : '#203a54',
+                        border: '1px solid #718392'
+                      }}
+                    >
+                      Update
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowApiKeyInput(false);
+                        setNewApiKey('');
+                      }}
+                      className="flex-1 sm:flex-none px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                      style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs" style={{ color: '#718392' }}>
                   Get your API key from <a href="https://dashboard.render.com/account/api-keys" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline">Render Dashboard</a>
@@ -671,36 +683,36 @@ export default function Home() {
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 lg:pt-16 pb-8 sm:pb-12">
         {!user ? (
           /* Landing Page */
           <div className="text-center">
-            <h2 className="text-4xl font-bold text-white mb-4">
-              Deploy MCPs in Seconds
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4 px-2">
+              Connect to 100+ MCP Servers Instantly
             </h2>
-            <p className="text-xl mb-8" style={{ color: '#718392' }}>
-              One-click deployment of Model Context Protocol servers to your Render account
+            <p className="text-base sm:text-lg lg:text-xl mb-6 sm:mb-8 px-2" style={{ color: '#718392' }}>
+              Self-host your own MCPs or connect to pre-hosted Smithery servers for Poke
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-              <div className="rounded-2xl p-6" style={{ background: '#203a54', border: '1px solid #718392' }}>
-                <Zap className="h-12 w-12 text-white mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2 text-white">Easy Deployment</h3>
-                <p className="text-gray-300">Deploy MCPs to your Render account with one click</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-12">
+              <div className="rounded-2xl p-5 sm:p-6" style={{ background: '#203a54', border: '1px solid #718392' }}>
+                <Zap className="h-10 w-10 sm:h-12 sm:w-12 text-white mx-auto mb-3 sm:mb-4" />
+                <h3 className="text-base sm:text-lg font-semibold mb-2 text-white">Instant Access</h3>
+                <p className="text-sm sm:text-base text-gray-300">Browse 100+ pre-hosted Smithery MCPs or deploy your own</p>
               </div>
-              <div className="rounded-2xl p-6" style={{ background: '#203a54', border: '1px solid #718392' }}>
-                <Wrench className="h-12 w-12 text-white mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2 text-white">Secure</h3>
-                <p className="text-gray-300">Your API keys are encrypted and isolated</p>
+              <div className="rounded-2xl p-5 sm:p-6" style={{ background: '#203a54', border: '1px solid #718392' }}>
+                <Wrench className="h-10 w-10 sm:h-12 sm:w-12 text-white mx-auto mb-3 sm:mb-4" />
+                <h3 className="text-base sm:text-lg font-semibold mb-2 text-white">Easy Configuration</h3>
+                <p className="text-sm sm:text-base text-gray-300">Manage API keys and environment variables securely</p>
               </div>
-              <div className="rounded-2xl p-6" style={{ background: '#203a54', border: '1px solid #718392' }}>
-                <ExternalLink className="h-12 w-12 text-white mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2 text-white">Multi-User</h3>
-                <p className="text-gray-300">Each user gets their own MCP instances</p>
+              <div className="rounded-2xl p-5 sm:p-6" style={{ background: '#203a54', border: '1px solid #718392' }}>
+                <ExternalLink className="h-10 w-10 sm:h-12 sm:w-12 text-white mx-auto mb-3 sm:mb-4" />
+                <h3 className="text-base sm:text-lg font-semibold mb-2 text-white">One-Click Deploy</h3>
+                <p className="text-sm sm:text-base text-gray-300">Self-host MCPs on Render with automatic deployment</p>
               </div>
             </div>
             <button
               onClick={handleGitHubAuth}
-              className="px-8 py-3 rounded-lg text-lg font-semibold transition-all cursor-pointer"
+              className="px-6 py-2.5 sm:px-8 sm:py-3 rounded-lg text-base sm:text-lg font-semibold transition-all cursor-pointer"
               style={{ background: '#ffffff', color: '#203a54' }}
             >
               Get Started with GitHub
@@ -710,17 +722,17 @@ export default function Home() {
           /* Dashboard */
           <div>
             {/* Self-Hosted MCP Servers Grid */}
-            <section className="mb-16">
-              <div className="mb-8 flex items-center justify-between">
+            <section className="mb-12 sm:mb-16">
+              <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
-                <h2 className="text-2xl font-bold text-white mb-2">Self-Hosted MCP Servers</h2>
-                <p style={{ color: '#718392' }}>Deploy MCPs to your Render account and connect to Poke</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">Self-Hosted MCP Servers</h2>
+                <p className="text-sm sm:text-base" style={{ color: '#718392' }}>Deploy MCPs to your Render account and connect to Poke</p>
                 </div>
                 {user && (
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex flex-col items-start sm:items-end gap-1 self-end sm:self-auto">
                     <button
                       onClick={loadDeployments}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
                       style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
                     >
                       🔄 Refresh Status
@@ -734,7 +746,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {templates.map((template, index) => {
                   const templateKey = Object.keys(MCP_ICONS).find(key => {
                     const templateName = template.name.toLowerCase();
@@ -758,6 +770,7 @@ export default function Home() {
                       onUpdateEnvVar={updateEnvVar}
                       getEnvVarValue={getEnvVarValue}
                       onUpdateDeploymentEnvVars={updateDeploymentEnvVars}
+                      envVarsUpdateSuccess={envVarsUpdatedSuccess[templateKey] || false}
                     />
                   );
                 })}
@@ -765,15 +778,15 @@ export default function Home() {
             </section>
 
             {/* Smithery MCPs Section */}
-            <section className="mb-16">
-              <div className="mb-8">
-                <div className="flex items-start justify-between">
+            <section className="mb-12 sm:mb-16">
+              <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Smithery MCPs</h2>
-                    <p style={{ color: '#718392' }}>Pre-hosted MCPs by Smithery - connect directly to Poke</p>
+                    <h2 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">Smithery MCPs</h2>
+                    <p className="text-sm sm:text-base" style={{ color: '#718392' }}>Pre-hosted MCPs by Smithery - connect directly to Poke</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm" style={{ color: '#718392' }}>
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs sm:text-sm" style={{ color: '#718392' }}>
                       You&apos;ll be asked to enter API keys on Smithery OAuth after adding to Poke if needed
                     </p>
                   </div>
@@ -781,20 +794,21 @@ export default function Home() {
               </div>
 
               {/* Search Bar */}
-              <div className="mb-8">
-                <div className="flex gap-4 items-center">
+              <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-stretch sm:items-center">
                   <input
                     type="text"
                     placeholder="Search for more MCPs..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && searchSmitheryMcps(searchQuery)}
-                    className="flex-1 p-3 rounded-lg bg-slate-800 text-white border border-slate-600 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 p-2.5 sm:p-3 rounded-lg text-base bg-slate-800 text-white border border-slate-600 focus:border-blue-500 focus:outline-none"
+                    style={{ fontSize: '16px' }}
                   />
                   <button 
                     onClick={() => searchSmitheryMcps(searchQuery)}
                     disabled={isSearching || !searchQuery.trim()}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {isSearching ? 'Searching...' : 'Search'}
                   </button>
@@ -803,11 +817,11 @@ export default function Home() {
 
               {/* Search Results */}
               {searchResults.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-lg font-bold text-white mb-4">
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">
                     Search Results ({searchResults.length})
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     {searchResults.map((mcp, index) => (
                       <SmitheryMCPCard
                         key={`search-${mcp.mcp_id}-${index}`}
@@ -822,13 +836,13 @@ export default function Home() {
               )}
 
               {/* Curated MCPs */}
-              <div className="mb-8">
-                <h3 className="text-lg font-bold text-white mb-4">
+              <div className="mb-6 sm:mb-8">
+                <h3 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4">
                   Featured MCPs ({Object.keys(smitheryMcps).length})
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {Object.entries(smitheryMcps).map(([mcpId, mcp]) => (
                   <SmitheryMCPCard
                     key={mcpId}
@@ -842,25 +856,25 @@ export default function Home() {
             </section>
 
             {/* Instructions */}
-            <section className="rounded-2xl shadow-lg border p-8" style={{ background: '#203a54', borderColor: '#718392' }}>
-              <h3 className="text-xl font-semibold text-white mb-4">How to Connect MCPs to Poke</h3>
+            <section className="rounded-2xl shadow-lg border p-5 sm:p-6 lg:p-8" style={{ background: '#203a54', borderColor: '#718392' }}>
+              <h3 className="text-lg sm:text-xl font-semibold text-white mb-3 sm:mb-4">How to Connect MCPs to Poke</h3>
               
               {/* Self-hosted MCPs Instructions */}
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold text-white mb-3">Self-Hosted MCPs (Your Render Account)</h4>
-                <div className="space-y-3" style={{ color: '#718392' }}>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
-                    <p><strong className="text-white">Click &quot;Deploy MCP&quot;</strong> on any self-hosted server card</p>
+              <div className="mb-5 sm:mb-6">
+                <h4 className="text-base sm:text-lg font-semibold text-white mb-2 sm:mb-3">Self-Hosted MCPs (Your Render Account)</h4>
+                <div className="space-y-2.5 sm:space-y-3" style={{ color: '#718392' }}>
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Enter Render Api Key, then click &quot;Deploy MCP&quot;</strong> on any self-hosted server card and setup on Render</p>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
-                    <p><strong className="text-white">Enter your API keys</strong> when prompted</p>
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Enter your API keys</strong> if applicable to mcp server - click Configure API Keys dropdown to enter</p>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
-                    <p><strong className="text-white">Get your MCP URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
-                      poke.com/settings/connections <ExternalLink className="w-4 h-4" />
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Get your MCP URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
+                      poke.com/settings/connections <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
                     </a></p>
                   </div>
                 </div>
@@ -868,32 +882,32 @@ export default function Home() {
 
               {/* Smithery MCPs Instructions */}
               <div>
-                <h4 className="text-lg font-semibold text-white mb-3">Smithery MCPs (Pre-hosted)</h4>
-                <div className="space-y-3" style={{ color: '#718392' }}>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
-                    <p><strong className="text-white">Click &quot;Get Smithery URL&quot;</strong> to get the generic Smithery MCP URL</p>
+                <h4 className="text-base sm:text-lg font-semibold text-white mb-2 sm:mb-3">Smithery MCPs (Pre-hosted)</h4>
+                <div className="space-y-2.5 sm:space-y-3" style={{ color: '#718392' }}>
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>1</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Click &quot;Get Smithery URL&quot;</strong> to get the generic Smithery MCP URL</p>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
-                    <p><strong className="text-white">Copy the URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
-                      poke.com/settings/connections <ExternalLink className="w-4 h-4" />
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>2</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Copy the URL</strong> and add it to Poke at <a href="https://poke.com/settings/connections" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 underline inline-flex items-center gap-1">
+                      poke.com/settings/connections <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4" />
                     </a></p>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
-                    <p><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery&apos;s OAuth page</p>
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>3</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Enter your API keys securely</strong> when redirected to Smithery&apos;s OAuth page</p>
                   </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-semibold text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>4</span>
-                    <p><strong className="text-white">Optional:</strong> Pre-configure apikeys directly on Smithery using the shield button</p>
+                  <div className="flex gap-2 sm:gap-3">
+                    <span className="flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm" style={{ background: '#000000', color: '#ffffff', border: '1px solid #718392' }}>4</span>
+                    <p className="text-sm sm:text-base"><strong className="text-white">Optional:</strong> Pre-configure apikeys directly on Smithery using the external link button</p>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 p-4 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
-                <p className="text-sm" style={{ color: '#718392' }}>
-                  <strong className="text-white">💡 Pro Tip:</strong> Smithery MCPs are pre-hosted and ready to use immediately, while self-hosted MCPs give you full control over your own infrastructure.
+              <div className="mt-5 sm:mt-6 p-3 sm:p-4 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
+                <p className="text-xs sm:text-sm" style={{ color: '#718392' }}>
+                  <strong className="text-white">💡 Smithery MCPs are pre-hosted and ready to use immediately, while self-hosted MCPs give you full control over your own infrastructure. </strong> 
                 </p>
               </div>
             </section>

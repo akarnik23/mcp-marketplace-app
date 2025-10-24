@@ -14,11 +14,14 @@ CACHE_HOURS = 24
 
 # Curated list of high-quality MCPs to display
 CURATED_MCP_SEARCHES = [
-    "github", "notion", "linear", "google calendar", "gmail", "slack", "discord", 
-    "email", "google meet", "task", "todoist", "desktop commander", "automation", "workflow",
-    "google maps", "zoom", "outlook", "telegram", "todoist", "whatsapp", 
-    "web", "memory", "news", "weather", "crypto", "stock", "perplexity", 
-    "exa", "brave", "supabase", "paypal", "arxiv"
+    "github", "notion", "linear", 
+    "google calendar", "gmail", "slack", 
+    "discord", "exa", "todoist", 
+    "brave", "workflow", "google maps", 
+    "whatsapp", "web", "memory", 
+    "deepwiki", "united states weather", "crypto price", 
+    "perplexity", "desktop commander", "supabase", 
+    "paypal", "arxiv", "financial modeling prep mcp server"
 ]
 
 def get_smithery_mcps_cached() -> Dict[str, Any]:

@@ -95,15 +95,26 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 
 ## API Endpoints
 
+### Authentication
 - `GET /` - Health check
 - `GET /auth/github` - Start GitHub OAuth
 - `GET /auth/github/callback` - OAuth callback
 - `GET /auth/me` - Get current user
+
+### MCP Management
 - `GET /mcps/templates` - List available MCP templates
 - `POST /mcps/detect-services` - Detect user's Render services
 - `POST /mcps/deploy` - Deploy MCP with environment variables
+- `GET /mcps/deployments` - Get user's deployments
 - `POST /render/validate-key` - Validate Render API key
+
+### Environment Variables
+- `GET /mcps/deployments/{deployment_id}/env-vars` - Get masked env vars
+- `POST /mcps/services/{service_id}/env-vars` - Update service env vars
+
+### Smithery Integration
 - `GET /mcps/smithery` - Get curated Smithery MCPs
+- `GET /mcps/smithery/search` - Search Smithery MCPs with relevance scoring
 - `GET /mcps/smithery/{mcp_id}/url` - Get Smithery MCP URL
 
 ## MCP Types

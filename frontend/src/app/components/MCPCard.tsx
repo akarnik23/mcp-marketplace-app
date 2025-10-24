@@ -18,6 +18,7 @@ interface MCPCardProps {
   onUpdateEnvVar: (templateKey: string, keyName: string, value: string) => void;
   getEnvVarValue: (templateKey: string, keyName: string) => string;
   onUpdateDeploymentEnvVars?: (deploymentId: string, templateKey: string) => void;
+  envVarsUpdateSuccess?: boolean;
 }
 
 export const MCPCard = ({
@@ -31,7 +32,8 @@ export const MCPCard = ({
   showEnvVars,
   onUpdateEnvVar,
   getEnvVarValue,
-  onUpdateDeploymentEnvVars
+  onUpdateDeploymentEnvVars,
+  envVarsUpdateSuccess
 }: MCPCardProps) => {
   const [localCopiedUrl, setLocalCopiedUrl] = useState<string>('');
 
@@ -193,6 +195,9 @@ export const MCPCard = ({
                       >
                         <Wrench className="w-4 h-4" />
                         Update Environment Variables
+                        {envVarsUpdateSuccess && (
+                          <CheckCircle className="w-4 h-4 text-green-400 animate-in fade-in zoom-in duration-200" />
+                        )}
                       </button>
                     </div>
                   )}
