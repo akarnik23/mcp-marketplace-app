@@ -295,8 +295,7 @@ export const MCPCard = ({
               {deployment.status === 'sleeping' && !isWaking && onWakeUp && (
                 <button
                   onClick={() => onWakeUp(templateKey, deployment.url)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold mb-3 active:scale-95 transition-all cursor-pointer"
-                  style={{ background: '#f59e0b', color: '#ffffff' }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold mb-3 active:scale-95 transition-all cursor-pointer bg-blue-900/30 text-blue-300 border border-blue-700"
                 >
                   <Zap className="w-5 h-5" />
                   Wake Up Service
@@ -316,7 +315,7 @@ export const MCPCard = ({
               {/* Add to Poke Button */}
               <button
                 onClick={() => handleAddToPoke(deployment.url)}
-                disabled={isWaking}
+                disabled={isWaking || deployment.status === 'sleeping'}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: '#ffffff', color: '#203a54' }}
               >
