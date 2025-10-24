@@ -296,12 +296,12 @@ export default function Home() {
         // Show success checkmark
         setEnvVarsUpdatedSuccess(prev => ({ ...prev, [templateKey]: true }));
         
-        // Fully mask the values that were just updated
+        // Mask the values that were just updated (match actual length)
         const maskedEnvVars: Record<string, string> = {};
         Object.entries(filteredEnvVars).forEach(([key, value]) => {
           if (value && value.length > 0) {
-            // Fully mask with 20 bullets regardless of actual length (for security)
-            maskedEnvVars[key] = '•'.repeat(20);
+            // Mask with bullets matching actual length
+            maskedEnvVars[key] = '•'.repeat(value.length);
           }
         });
         

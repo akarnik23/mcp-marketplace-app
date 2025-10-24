@@ -637,10 +637,10 @@ async def get_smithery_mcp_url(
     }
 
 def mask_api_key(value: str) -> str:
-    """Mask API key for display"""
-    if not value or len(value) <= 4:
-        return "••••"
-    return "••••••••••••••••"
+    """Mask API key for display - return bullets matching actual length"""
+    if not value:
+        return ""
+    return "•" * len(value)  # Match actual length
 
 @app.get("/mcps/deployments/{deployment_id}/env-vars")
 async def get_deployment_env_vars(
