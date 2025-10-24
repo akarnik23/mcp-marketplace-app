@@ -318,7 +318,7 @@ export default function Home() {
           setEnvVarsUpdatedSuccess(prev => ({ ...prev, [templateKey]: false }));
         }, 3000);
         
-        await loadDeployments(); // Refresh deployment status
+        // Don't reload deployments here - it would overwrite our correct local masking
       } else {
         const errorData = await response.json();
         alert(`Error updating environment variables: ${errorData.detail || 'Unknown error'}`);
