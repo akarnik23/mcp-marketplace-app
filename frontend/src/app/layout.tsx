@@ -17,12 +17,18 @@ export const metadata: Metadata = {
   description: "Browse MCP servers - self-hosted or pre-hosted Smithery servers for Poke integration",
   icons: {
     icon: '/favicon.svg',
-    apple: '/favicon.svg',
+    apple: [
+      {
+        url: '/homeIcon.png',
+        sizes: '180x180',
+        type: 'image/png',
+      }
+    ],
   },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'black',
     title: 'Poke MCP',
   },
   viewport: {
@@ -30,8 +36,9 @@ export const metadata: Metadata = {
     initialScale: 1,
     maximumScale: 5,
     userScalable: true,
+    viewportFit: 'cover',
   },
-  themeColor: '#0a1929',
+  themeColor: '#203a54',
 };
 
 export default function RootLayout({

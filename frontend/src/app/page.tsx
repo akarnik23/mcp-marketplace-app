@@ -510,7 +510,7 @@ export default function Home() {
   return (
     <div className="min-h-screen text-white" style={{ background: 'linear-gradient(to bottom, #203a54, #000000)' }}>
       {/* Header */}
-      <header className="backdrop-blur border-b" style={{ background: 'rgba(32,58,84,0.7)', borderColor: '#718392' }}>
+      <header className="sticky top-0 z-50 backdrop-blur border-b" style={{ background: 'rgba(32,58,84,0.95)', borderColor: '#718392' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2 sm:gap-3">

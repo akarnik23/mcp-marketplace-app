@@ -4,15 +4,20 @@
   "description": "Browse MCP servers - self-hosted or pre-hosted Smithery servers for Poke integration",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a1929",
-  "theme_color": "#0a1929",
+  "background_color": "#203a54",
+  "theme_color": "#203a54",
   "orientation": "portrait-primary",
   "icons": [
     {
+      "src": "/homeIcon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/svg+xml"
     }
   ]
 }
