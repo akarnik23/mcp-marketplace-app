@@ -24,8 +24,8 @@ export interface SmitheryMCP {
   mcp_id: string;
   name: string;
   description: string;
-  smithery_url: string;
-  homepage: string;
+  mcp_url?: string;  // MCP connection URL (https://server.smithery.ai/.../mcp)
+  smithery_url: string;  // Smithery info page (https://smithery.ai/server/...)
   icon_url: string;
   required_keys: string[];
 }

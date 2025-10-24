@@ -20,8 +20,9 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
     try {
       // Clear any existing URL first
       setGeneratedUrl('');
-      await onGetUrl(mcpId);
-      setGeneratedUrl(mcp.smithery_url);
+      const data = await onGetUrl(mcpId);
+      // Use mcp_url for connection, fallback to smithery_url for backwards compatibility
+      setGeneratedUrl(data?.mcp_url || data?.smithery_url || mcp.mcp_url || mcp.smithery_url);
     } catch (error) {
       console.error('Error getting URL:', error);
     }
@@ -29,7 +30,8 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(generatedUrl || mcp.smithery_url);
+      // Use mcp_url for connection, fallback to smithery_url for backwards compatibility
+      await navigator.clipboard.writeText(generatedUrl || mcp.mcp_url || mcp.smithery_url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
@@ -62,9 +64,9 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
             </div>
           </div>
           
-          {/* Info button to Smithery homepage */}
+          {/* Info button to Smithery page */}
           <a
-            href={mcp.homepage}
+            href={mcp.smithery_url}
             target="_blank"
             rel="noopener noreferrer"
             className="p-2 rounded-lg text-sm font-medium transition-all cursor-pointer hover:opacity-90 flex-shrink-0"

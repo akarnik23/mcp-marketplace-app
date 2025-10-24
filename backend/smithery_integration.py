@@ -82,8 +82,8 @@ def _get_curated_mcps(servers: List[Dict]) -> Dict[str, Any]:
                 curated_mcps[mcp_id] = {
                     "name": top_result.get('displayName', ''),
                     "description": description,
-                    "smithery_url": f"https://smithery.ai/server/{qualified_name}",
-                    "homepage": top_result.get('homepage', ''),
+                    "mcp_url": f"https://server.smithery.ai/{qualified_name}/mcp",
+                    "smithery_url": top_result.get('homepage', f"https://smithery.ai/server/{qualified_name}"),  # Use Smithery's homepage field
                     "verified": top_result.get('verified', False),
                     "use_count": top_result.get('useCount', 0),
                     "icon_url": top_result.get('iconUrl', ''),
@@ -124,8 +124,8 @@ def search_smithery_mcps(query: str, limit: int = 20) -> List[Dict[str, Any]]:
             "mcp_id": mcp_id,
             "name": server.get('displayName', ''),
             "description": description,
-            "smithery_url": f"https://smithery.ai/server/{qualified_name}",
-            "homepage": server.get('homepage', ''),
+            "mcp_url": f"https://server.smithery.ai/{qualified_name}/mcp",
+            "smithery_url": server.get('homepage', f"https://smithery.ai/server/{qualified_name}"),  # Use Smithery's homepage field
             "verified": server.get('verified', False),
             "use_count": server.get('useCount', 0),
             "icon_url": server.get('iconUrl', ''),

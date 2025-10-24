@@ -585,12 +585,12 @@ async def get_smithery_mcp_url(
         mcp_info = smithery_mcps[mcp_id]
         return {
             "mcp_id": mcp_id,
-            "smithery_url": mcp_info["smithery_url"],
+            "mcp_url": mcp_info["mcp_url"],  # MCP connection URL
+            "smithery_url": mcp_info.get("smithery_url", f"https://smithery.ai/server/{mcp_id}"),  # Smithery info page
             "name": mcp_info["name"],
             "description": mcp_info["description"],
             "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
             "poke_settings_url": "https://poke.com/settings/connections",
-            "smithery_info_url": mcp_info.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
             "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
             "verified": mcp_info.get("verified", False),
             "use_count": mcp_info.get("use_count", 0)
@@ -605,12 +605,12 @@ async def get_smithery_mcp_url(
             mcp_data = search_results[0]
             return {
                 "mcp_id": mcp_id,
-                "smithery_url": mcp_data["smithery_url"],
+                "mcp_url": mcp_data["mcp_url"],  # MCP connection URL
+                "smithery_url": mcp_data.get("smithery_url", f"https://smithery.ai/server/{mcp_id}"),  # Smithery info page
                 "name": mcp_data["name"],
                 "description": mcp_data["description"],
                 "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
                 "poke_settings_url": "https://poke.com/settings/connections",
-                "smithery_info_url": mcp_data.get("homepage", f"https://smithery.ai/server/{mcp_id}"),
                 "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
                 "verified": mcp_data.get("verified", False),
                 "use_count": mcp_data.get("use_count", 0)
@@ -625,12 +625,12 @@ async def get_smithery_mcp_url(
     
     return {
         "mcp_id": mcp_id,
-        "smithery_url": f"https://smithery.ai/server/{clean_mcp_id}",
+        "mcp_url": f"https://server.smithery.ai/{clean_mcp_id}/mcp",  # MCP connection URL
+        "smithery_url": f"https://smithery.ai/server/{clean_mcp_id}",  # Smithery info page
         "name": mcp_id.replace("-", " ").title(),
         "description": f"MCP server for {clean_mcp_id}",
         "instructions": f"Add this URL to Poke at https://poke.com/settings/connections. You'll be redirected to Smithery to securely enter your API keys.",
         "poke_settings_url": "https://poke.com/settings/connections",
-        "smithery_info_url": f"https://smithery.ai/server/{clean_mcp_id}",
         "security_note": "Your API keys are handled securely by Smithery, not stored on our servers.",
         "verified": False,
         "use_count": 0
