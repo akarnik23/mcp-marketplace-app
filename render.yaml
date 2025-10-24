@@ -22,7 +22,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: ENCRYPTION_KEY
-        value: JBhBvwcYXWysDJ4GpoAA29nK2zCrCfj3z8uVlBI5wxo=
+        sync: false
       - key: FRONTEND_URL
         value: https://mcp-marketplace-app-bay.vercel.app
       - key: SMITHERY_API_KEY
