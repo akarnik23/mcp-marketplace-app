@@ -178,7 +178,9 @@ export const MCPCard = ({
                         onChange={(e) => onUpdateEnvVar(templateKey, keyName, e.target.value)}
                         placeholder={`Enter your ${keyName}`}
                         className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        autoComplete="new-password"
+                        autoComplete="off"
+                        data-lpignore="true"
+                        data-form-type="other"
                       />
                     </div>
                   ))}
