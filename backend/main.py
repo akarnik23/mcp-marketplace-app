@@ -682,8 +682,9 @@ async def get_deployment_env_vars(
             decrypted_value = decrypt_value(api_key.encrypted_value)
             masked_vars[api_key.key_name] = mask_api_key(decrypted_value)
         except Exception:
-            # If decryption fails, just show masked value
-            masked_vars[api_key.key_name] = "••••••••••••••••"
+            # If decryption fails, return empty string so user knows to re-enter
+            # Don't return fake masked values that could be sent back to Render
+            masked_vars[api_key.key_name] = ""
     
     return {"env_vars": masked_vars}
 

@@ -178,29 +178,50 @@ export const MCPCard = ({
                         onChange={(e) => onUpdateEnvVar(templateKey, keyName, e.target.value)}
                         placeholder={`Enter your ${keyName}`}
                         className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoComplete="new-password"
                       />
                     </div>
                   ))}
                   
                   {/* Update Environment Variables Button - show for deployed MCPs with service_id */}
-                  {((deployment?.service_id || userService?.services?.[0]?.id) && onUpdateDeploymentEnvVars) && (
-                    <div className="mt-4">
-                      <button
-                        onClick={() => onUpdateDeploymentEnvVars(
-                          deployment?.service_id || userService?.services?.[0]?.id || '', 
-                          templateKey
+                  {((deployment?.service_id || userService?.services?.[0]?.id) && onUpdateDeploymentEnvVars) && (() => {
+                    // Check if all required fields have non-masked values
+                    const allFieldsValid = template.required_keys.every(keyName => {
+                      const value = getEnvVarValue(templateKey, keyName);
+                      return value && !value.includes('••••');
+                    });
+                    
+                    return (
+                      <div className="mt-4">
+                        <button
+                          onClick={() => onUpdateDeploymentEnvVars(
+                            deployment?.service_id || userService?.services?.[0]?.id || '', 
+                            templateKey
+                          )}
+                          disabled={!allFieldsValid}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all"
+                          style={{ 
+                            background: allFieldsValid ? '#203a54' : '#1a2f42', 
+                            color: allFieldsValid ? '#ffffff' : '#718392', 
+                            border: '1px solid #718392',
+                            cursor: allFieldsValid ? 'pointer' : 'not-allowed',
+                            opacity: allFieldsValid ? 1 : 0.5
+                          }}
+                        >
+                          <Wrench className="w-4 h-4" />
+                          Update Environment Variables
+                          {envVarsUpdateSuccess && (
+                            <CheckCircle className="w-4 h-4 text-green-400 animate-in fade-in zoom-in duration-200" />
+                          )}
+                        </button>
+                        {!allFieldsValid && (
+                          <p className="text-xs text-yellow-400 mt-2 text-center">
+                            Please enter all required credentials to update
+                          </p>
                         )}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium active:scale-95 transition-all cursor-pointer"
-                        style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
-                      >
-                        <Wrench className="w-4 h-4" />
-                        Update Environment Variables
-                        {envVarsUpdateSuccess && (
-                          <CheckCircle className="w-4 h-4 text-green-400 animate-in fade-in zoom-in duration-200" />
-                        )}
-                      </button>
-                    </div>
-                  )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
