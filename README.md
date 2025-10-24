@@ -7,10 +7,12 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - 🔐 **GitHub OAuth Authentication** - Secure user authentication
 - 🚀 **One-Click Deployment** - Deploy MCPs to your Render account
 - 🌐 **Smithery Integration** - Pre-hosted MCPs ready to connect to Poke
-- 🔑 **API Key Management** - Secure encrypted storage of user API keys
+- 🔑 **API Key Management** - Secure encrypted storage of user API keys with validation
 - 🌐 **Environment Variables** - Easy configuration of MCP environment variables
 - ⚡ **Performance Optimized** - Parallel processing and caching for fast loading
-- 🔒 **Production Ready** - PostgreSQL database, encrypted storage, JWT tokens
+- 🔒 **Production Ready** - PostgreSQL database, encrypted storage, JWT tokens (24hr expiry)
+- 📱 **Mobile Optimized** - Progressive Web App (PWA) with iOS home screen support
+- 🎨 **Responsive Design** - Beautiful UI on desktop, tablet, and mobile
 
 ## Architecture
 
@@ -27,11 +29,13 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 
 ### Frontend (`/frontend`)
 - **Next.js** - React framework with TypeScript
-- **Tailwind CSS** - Modern styling with dramatic gradients
+- **Tailwind CSS** - Modern styling with dramatic gradients and responsive design
+- **Progressive Web App (PWA)** - Add to home screen on iOS with full-screen support
 - **GitHub OAuth** - User authentication flow
-- **Environment Variables UI** - Professional API key management
-- **Smithery MCP Cards** - Pre-hosted MCP integration
+- **Environment Variables UI** - Professional API key management with validation
+- **Smithery MCP Cards** - Pre-hosted MCP integration with search
 - **Performance Optimized** - Sequential loading to prevent connection bottlenecks
+- **Mobile First** - Responsive breakpoints and iOS safe area handling
 
 ## Quick Start
 
@@ -84,11 +88,13 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - `DATABASE_URL` - PostgreSQL connection string
 - `GITHUB_CLIENT_ID` - GitHub OAuth app client ID
 - `GITHUB_CLIENT_SECRET` - GitHub OAuth app client secret
-- `GITHUB_REDIRECT_URI` - OAuth callback URL
-- `JWT_SECRET_KEY` - Secret for JWT token signing
-- `ENCRYPTION_KEY` - Fernet key for encrypting user data
-- `FRONTEND_URL` - Frontend URL for CORS
+- `GITHUB_REDIRECT_URI` - OAuth callback URL (points to backend: `/auth/github/callback`)
+- `JWT_SECRET_KEY` - Secret for JWT token signing (generate random 32+ char string)
+- `ENCRYPTION_KEY` - Fernet key for encrypting user data (generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+- `FRONTEND_URL` - Frontend URL for CORS configuration
 - `SMITHERY_API_KEY` - Smithery Registry API key for MCP discovery
+
+See `backend/env.example` for detailed configuration examples.
 
 ### Frontend
 - `NEXT_PUBLIC_API_URL` - Backend API URL
@@ -109,8 +115,9 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - `POST /render/validate-key` - Validate Render API key
 
 ### Environment Variables
-- `GET /mcps/deployments/{deployment_id}/env-vars` - Get masked env vars
-- `POST /mcps/services/{service_id}/env-vars` - Update service env vars
+- `GET /mcps/deployments/{deployment_id}/env-vars` - Get masked env vars for a deployment
+- `POST /mcps/deployments/{deployment_id}/env-vars` - Update deployment env vars (requires deployment_id)
+- `POST /mcps/services/{service_id}/env-vars` - Update service env vars directly (primary method)
 
 ### Smithery Integration
 - `GET /mcps/smithery` - Get curated Smithery MCPs
@@ -137,11 +144,25 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 
 ## Security
 
-- All user API keys are encrypted before database storage
-- JWT tokens for secure authentication
-- CORS protection
+- All user API keys are encrypted before database storage using Fernet encryption
+- JWT tokens for secure authentication (24-hour expiry)
+- CORS protection with explicit allowed origins
 - Input validation and sanitization
 - No sensitive data in logs
+- Environment variables for all secrets (no hardcoded credentials)
+- Secure password input fields with autofill prevention
+- Encrypted database connections for production (PostgreSQL SSL)
+
+## Browser Compatibility
+
+- **Chrome/Edge**: Full support with PWA features
+- **Safari (iOS/macOS)**: Full support with home screen add support
+- **Firefox**: Full support
+- **Mobile**: Optimized for iOS and Android
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
