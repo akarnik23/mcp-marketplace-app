@@ -8,7 +8,7 @@ import { SMITHERY_ICONS } from '../constants';
 interface SmitheryMCPCardProps {
   mcp: SmitheryMCP;
   mcpId: string;
-  onGetUrl: (mcpId: string) => Promise<any>;
+  onGetUrl: (mcpId: string) => Promise<{ mcp_url?: string; smithery_url?: string; [key: string]: unknown }>;
   isGettingUrl: boolean;
 }
 
@@ -48,6 +48,7 @@ export function SmitheryMCPCard({ mcp, mcpId, onGetUrl, isGettingUrl }: Smithery
           <div className="flex items-center gap-3">
             {/* Use real icon from Smithery API, but filter out generic GitHub fallback icons */}
             {mcp.icon_url && !mcp.icon_url.includes('icons.duckduckgo.com/ip3/github.com.ico') ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img 
                 src={mcp.icon_url} 
                 alt="icon" 

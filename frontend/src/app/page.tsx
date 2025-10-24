@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Zap, Wrench, ExternalLink, Github, Check } from 'lucide-react';
+import { Zap, Wrench, ExternalLink, Github } from 'lucide-react';
 import Image from 'next/image';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars, SmitheryMCP } from './types';
 import { ERROR_MESSAGES, MCP_ICONS } from './constants';
