@@ -8,7 +8,7 @@ import { SMITHERY_ICONS } from '../constants';
 interface SmitheryMCPCardProps {
   mcp: SmitheryMCP;
   mcpId: string;
-  onGetUrl: (mcpId: string) => Promise<void>;
+  onGetUrl: (mcpId: string) => Promise<any>;
   isGettingUrl: boolean;
 }
 
