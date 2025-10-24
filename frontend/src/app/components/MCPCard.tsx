@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Copy, CheckCircle, ExternalLink, Zap, Wrench, Github } from 'lucide-react';
 import { MCPTemplate, UserServiceData, DeploymentStatus } from '../types';
 import { MCP_ICONS, MCP_CAPABILITIES, POKE_CONNECTIONS_URL } from '../constants';
@@ -19,6 +19,9 @@ interface MCPCardProps {
   getEnvVarValue: (templateKey: string, keyName: string) => string;
   onUpdateDeploymentEnvVars?: (deploymentId: string, templateKey: string) => void;
   envVarsUpdateSuccess?: boolean;
+  isWaking?: boolean;
+  onWakeUp?: (templateKey: string, serviceUrl: string) => void;
+  wakingStartTime?: number;
 }
 
 export const MCPCard = ({
@@ -33,9 +36,28 @@ export const MCPCard = ({
   onUpdateEnvVar,
   getEnvVarValue,
   onUpdateDeploymentEnvVars,
-  envVarsUpdateSuccess
+  envVarsUpdateSuccess,
+  isWaking = false,
+  onWakeUp,
+  wakingStartTime
 }: MCPCardProps) => {
   const [localCopiedUrl, setLocalCopiedUrl] = useState<string>('');
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+
+  // Update elapsed time for waking services
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isWaking && wakingStartTime) {
+      interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - wakingStartTime) / 1000));
+      }, 1000);
+    } else {
+      setElapsedTime(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isWaking, wakingStartTime]);
 
   const handleCopy = async (url: string) => {
     const success = await copyToClipboard(url);
@@ -81,6 +103,16 @@ export const MCPCard = ({
         return 'Offline';
       default:
         return 'Deploy';
+    }
+  };
+
+  const getWakingMessage = () => {
+    if (elapsedTime < 30) {
+      return `Waking service... ${elapsedTime}s`;
+    } else if (elapsedTime < 60) {
+      return `Still waking... ${elapsedTime}s`;
+    } else {
+      return `Almost there... ${elapsedTime}s`;
     }
   };
 
@@ -259,10 +291,33 @@ export const MCPCard = ({
                 </div>
               </div>
 
+              {/* Wake Up Button for Sleeping Services */}
+              {deployment.status === 'sleeping' && !isWaking && onWakeUp && (
+                <button
+                  onClick={() => onWakeUp(templateKey, deployment.url)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold mb-3 active:scale-95 transition-all cursor-pointer"
+                  style={{ background: '#f59e0b', color: '#ffffff' }}
+                >
+                  <Zap className="w-5 h-5" />
+                  Wake Up Service
+                </button>
+              )}
+
+              {/* Waking Progress */}
+              {isWaking && (
+                <div className="rounded-md p-3 mb-3" style={{ background: '#000000', border: '1px solid #718392' }}>
+                  <div className="flex items-center gap-3">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span className="text-sm text-white">{getWakingMessage()}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Add to Poke Button */}
               <button
                 onClick={() => handleAddToPoke(deployment.url)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all cursor-pointer"
+                disabled={isWaking}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: '#ffffff', color: '#203a54' }}
               >
                 <ExternalLink className="w-5 h-5" />

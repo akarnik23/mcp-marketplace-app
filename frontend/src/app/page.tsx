@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Zap, Wrench, ExternalLink, Github } from 'lucide-react';
 import Image from 'next/image';
 import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars, SmitheryMCP } from './types';
@@ -35,6 +35,12 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SmitheryMCP[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Wake-up service state
+  const [wakingServices, setWakingServices] = useState<Set<string>>(new Set());
+  const [wakingStartTimes, setWakingStartTimes] = useState<Record<string, number>>({});
+  const wakeIntervals = useRef<Record<string, NodeJS.Timeout>>({});
+  const wakeTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
 
 
   // Update timestamp display every minute
@@ -323,6 +329,106 @@ export default function Home() {
       const hours = Math.floor(diffInSeconds / 3600);
       return `${hours} hour${hours === 1 ? '' : 's'} ago`;
     }
+  };
+
+  // Cleanup wake intervals on unmount
+  useEffect(() => {
+    // Capture current ref values for cleanup
+    const intervals = wakeIntervals.current;
+    const timeouts = wakeTimeouts.current;
+    
+    return () => {
+      // Clear all intervals and timeouts on unmount
+      Object.values(intervals).forEach(clearInterval);
+      Object.values(timeouts).forEach(clearTimeout);
+    };
+  }, []);
+
+  const wakeUpService = async (templateKey: string, serviceUrl: string) => {
+    // Mark service as waking
+    setWakingServices(prev => new Set(prev).add(templateKey));
+    setWakingStartTimes(prev => ({ ...prev, [templateKey]: Date.now() }));
+
+    // Send initial wake-up request (this will trigger Render to start the service)
+    try {
+      await fetch(serviceUrl, { 
+        method: 'GET',
+        mode: 'no-cors' // Avoid CORS issues, we just want to ping the service
+      });
+    } catch {
+      // Ignore errors, we just want to trigger the wake-up
+      console.log('Wake-up request sent to', serviceUrl);
+    }
+
+    // Poll for status every 5 seconds
+    const pollStatus = async () => {
+      if (!renderApiKey) return;
+
+      try {
+        const detectedServices = await detectUserServices(renderApiKey);
+        if (detectedServices && detectedServices[templateKey]) {
+          const serviceData = detectedServices[templateKey] as UserServiceData;
+          if (serviceData.available && serviceData.services.length > 0) {
+            const service = serviceData.services[0];
+            
+            // Check if service is now live
+            if (service.status === 'live') {
+              // Update deployment status
+              setDeployments(prev => ({
+                ...prev,
+                [templateKey]: {
+                  ...prev[templateKey],
+                  status: 'live'
+                }
+              }));
+
+              // Clear waking state
+              cleanupWakeProcess(templateKey);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking service status:', error);
+      }
+    };
+
+    // Start polling
+    const intervalId = setInterval(pollStatus, 5000);
+    wakeIntervals.current[templateKey] = intervalId;
+
+    // Set timeout (2 minutes)
+    const timeoutId = setTimeout(() => {
+      cleanupWakeProcess(templateKey);
+      alert(`Service wake-up timed out for ${templateKey}. The service may need more time or could be experiencing issues. Try refreshing the status in a moment.`);
+    }, 120000); // 2 minutes
+    wakeTimeouts.current[templateKey] = timeoutId;
+  };
+
+  const cleanupWakeProcess = (templateKey: string) => {
+    // Clear interval
+    if (wakeIntervals.current[templateKey]) {
+      clearInterval(wakeIntervals.current[templateKey]);
+      delete wakeIntervals.current[templateKey];
+    }
+
+    // Clear timeout
+    if (wakeTimeouts.current[templateKey]) {
+      clearTimeout(wakeTimeouts.current[templateKey]);
+      delete wakeTimeouts.current[templateKey];
+    }
+
+    // Remove from waking state
+    setWakingServices(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(templateKey);
+      return newSet;
+    });
+
+    setWakingStartTimes(prev => {
+      const newTimes = { ...prev };
+      delete newTimes[templateKey];
+      return newTimes;
+    });
   };
 
   const getSmitheryUrl = async (mcpId: string) => {
@@ -771,6 +877,9 @@ export default function Home() {
                       getEnvVarValue={getEnvVarValue}
                       onUpdateDeploymentEnvVars={updateDeploymentEnvVars}
                       envVarsUpdateSuccess={envVarsUpdatedSuccess[templateKey] || false}
+                      isWaking={wakingServices.has(templateKey)}
+                      onWakeUp={wakeUpService}
+                      wakingStartTime={wakingStartTimes[templateKey]}
                     />
                   );
                 })}
