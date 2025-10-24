@@ -237,8 +237,9 @@ export default function Home() {
   const updateEnvVar = (templateKey: string, keyName: string, value: string) => {
     // If user starts typing and the current value is masked, clear it
     const currentValue = envVars[templateKey]?.[keyName] || '';
-    if (value && currentValue.includes('••••')) {
-      value = ''; // Clear masked value when user starts typing
+    if (value && currentValue.includes('•')) {
+      // If they're typing over a masked value, start fresh
+      value = value.replace(/•/g, ''); // Remove any bullet characters
     }
     
     setEnvVars(prev => ({
@@ -278,7 +279,7 @@ export default function Home() {
       // Filter out masked values (don't send them to backend)
       const filteredEnvVars = Object.fromEntries(
         Object.entries(envVarsToUpdate).filter(([, value]) => 
-          value && !value.includes('••••')
+          value && !value.includes('•')
         )
       );
       
@@ -295,16 +296,28 @@ export default function Home() {
         // Show success checkmark
         setEnvVarsUpdatedSuccess(prev => ({ ...prev, [templateKey]: true }));
         
+        // Fully mask the values that were just updated
+        const maskedEnvVars: Record<string, string> = {};
+        Object.entries(filteredEnvVars).forEach(([key, value]) => {
+          if (value && value.length > 0) {
+            // Fully mask with 20 bullets regardless of actual length (for security)
+            maskedEnvVars[key] = '•'.repeat(20);
+          }
+        });
+        
+        setEnvVars(prev => ({
+          ...prev,
+          [templateKey]: {
+            ...prev[templateKey],
+            ...maskedEnvVars
+          }
+        }));
+        
         // Hide checkmark after 3 seconds
         setTimeout(() => {
           setEnvVarsUpdatedSuccess(prev => ({ ...prev, [templateKey]: false }));
         }, 3000);
         
-        // Reload masked values to show updated state (if deployment_id exists)
-        const deployment = deployments[templateKey];
-        if (deployment?.deployment_id) {
-          await loadMaskedEnvVars(deployment.deployment_id, templateKey);
-        }
         await loadDeployments(); // Refresh deployment status
       } else {
         const errorData = await response.json();

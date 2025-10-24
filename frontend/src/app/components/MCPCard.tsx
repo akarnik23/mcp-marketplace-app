@@ -205,11 +205,11 @@ export const MCPCard = ({
                         {keyName}
                       </label>
                       <input
-                        type="password"
+                        type="text"
                         value={getEnvVarValue(templateKey, keyName)}
                         onChange={(e) => onUpdateEnvVar(templateKey, keyName, e.target.value)}
                         placeholder={`Enter your ${keyName}`}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                         autoComplete="off"
                         data-lpignore="true"
                         data-form-type="other"
@@ -222,7 +222,7 @@ export const MCPCard = ({
                     // Check if all required fields have non-masked values
                     const allFieldsValid = template.required_keys.every(keyName => {
                       const value = getEnvVarValue(templateKey, keyName);
-                      return value && !value.includes('••••');
+                      return value && !value.includes('•');
                     });
                     
                     return (
