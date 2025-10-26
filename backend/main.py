@@ -1106,18 +1106,26 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Wake up the service (resume if suspended, restart if sleeping)
+        # Wake up the service by making HTTP request (resume if suspended first)
         service_status = service_data.get("suspended", "not_suspended")
         try:
             if service_status == "suspended":
                 # Resume the service if it's suspended
                 print(f"Service {request.service_id} is suspended, resuming...")
                 render_client.resume_service(request.service_id)
-            # Restart the service to wake it up if it's sleeping
-            print(f"Service {request.service_id} may be sleeping, restarting to wake up...")
-            render_client.restart_service(request.service_id)
+                # Wait for resume to process
+                await asyncio.sleep(5)
             
-            # Wait a bit for the service to start up (Render can take 30-60 seconds)
+            # Make an HTTP request to the service to wake it up (same as frontend wake-up button)
+            print(f"Waking up service at {mcp_url}...")
+            try:
+                # Use requests.get like the frontend wakeUpService function
+                wakeup_response = requests.get(f"{mcp_url}/", timeout=10)
+                print(f"Wake up request returned status {wakeup_response.status_code}")
+            except Exception as e:
+                print(f"Wake up request failed (service may be waking up): {e}")
+            
+            # Wait a bit for the service to fully start up (Render can take 30-60 seconds)
             await asyncio.sleep(10)
         except Exception as e:
             # Continue anyway, maybe the service will wake up naturally
