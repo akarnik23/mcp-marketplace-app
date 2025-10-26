@@ -1106,18 +1106,23 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Check if service is suspended and wake it up if needed
+        # Wake up the service (resume if suspended, restart if sleeping)
         service_status = service_data.get("suspended", "not_suspended")
-        if service_status == "suspended":
-            try:
-                # First resume the service to unsuspend it
+        try:
+            if service_status == "suspended":
+                # Resume the service if it's suspended
+                print(f"Service {request.service_id} is suspended, resuming...")
                 render_client.resume_service(request.service_id)
-                
-                # Wait a bit for the service to start up (Render can take 30-60 seconds)
-                await asyncio.sleep(10)
-            except Exception as e:
-                # Continue anyway, maybe the service will wake up naturally
-                pass
+            # Restart the service to wake it up if it's sleeping
+            print(f"Service {request.service_id} may be sleeping, restarting to wake up...")
+            render_client.restart_service(request.service_id)
+            
+            # Wait a bit for the service to start up (Render can take 30-60 seconds)
+            await asyncio.sleep(10)
+        except Exception as e:
+            # Continue anyway, maybe the service will wake up naturally
+            print(f"Could not wake up service {request.service_id}: {e}")
+            pass
         
         # Fetch environment variable keys from Render
         env_var_keys = []
