@@ -88,11 +88,20 @@ async def fetch_mcp_tools(mcp_url: str, max_retries: int = 3) -> list:
 async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
     """Fetch tools asynchronously and update the database"""
     try:
-        # Wait a bit for the service to start up
-        await asyncio.sleep(10)
+        # Wait longer for the service to fully wake up (Render can take 30-120 seconds to cold start)
+        # If service was sleeping, it needs time to wake up
+        print(f"Waiting 60s for service to wake up before fetching tools for {custom_mcp_id}...")
+        await asyncio.sleep(60)
         
-        # Fetch tools
+        # Fetch tools with retry logic
+        print(f"Attempting to fetch tools from {mcp_url}...")
         tools = await fetch_mcp_tools(mcp_url)
+        
+        if not tools:
+            # If first attempt failed, try again after another 60s
+            print(f"No tools fetched, waiting another 60s before retry...")
+            await asyncio.sleep(10)
+            tools = await fetch_mcp_tools(mcp_url)
         
         # Create a new database session for this async task
         from database import SessionLocal
@@ -103,6 +112,7 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
             if custom_mcp:
                 custom_mcp.tools_list = json.dumps(tools)
                 db.commit()
+                print(f"Successfully updated {len(tools) if tools else 0} tools for {custom_mcp_id}")
         finally:
             db.close()
             
@@ -1106,31 +1116,23 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Wake up the service by making HTTP request (resume if suspended first)
+        # Resume service if suspended, then wake it up
         service_status = service_data.get("suspended", "not_suspended")
-        try:
-            if service_status == "suspended":
+        if service_status == "suspended":
+            try:
                 # Resume the service if it's suspended
                 print(f"Service {request.service_id} is suspended, resuming...")
                 render_client.resume_service(request.service_id)
-                # Wait for resume to process
+                # Wait briefly for resume to process
                 await asyncio.sleep(5)
-            
-            # Make an HTTP request to the service to wake it up (same as frontend wake-up button)
-            print(f"Waking up service at {mcp_url}...")
-            try:
-                # Use requests.get like the frontend wakeUpService function
-                wakeup_response = requests.get(f"{mcp_url}/", timeout=10)
-                print(f"Wake up request returned status {wakeup_response.status_code}")
             except Exception as e:
-                print(f"Wake up request failed (service may be waking up): {e}")
-            
-            # Wait a bit for the service to fully start up (Render can take 30-60 seconds)
-            await asyncio.sleep(10)
-        except Exception as e:
-            # Continue anyway, maybe the service will wake up naturally
-            print(f"Could not wake up service {request.service_id}: {e}")
-            pass
+                # Continue anyway, maybe the service will wake up naturally
+                print(f"Could not resume service {request.service_id}: {e}")
+                pass
+        
+        # Note: We don't actively wake up the service here to avoid rate limits
+        # The async task will retry with backoff, or user can manually wake via button
+        print(f"Service {request.service_id} prepared, tools will be fetched in background")
         
         # Fetch environment variable keys from Render
         env_var_keys = []
