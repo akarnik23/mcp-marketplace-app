@@ -20,6 +20,19 @@ export interface MCPTemplate {
   template: string;
 }
 
+export interface CustomMCP {
+  id: string;
+  name: string;
+  description: string;
+  icon_name: string;
+  render_service_id: string;
+  mcp_url: string;
+  tools: string[];
+  required_keys: string[];
+  status?: string;  // Real-time status from Render API
+  created_at?: string;
+}
+
 export interface SmitheryMCP {
   mcp_id: string;
   name: string;

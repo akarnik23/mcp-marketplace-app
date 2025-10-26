@@ -37,6 +37,39 @@ export const SMITHERY_ICONS: Record<string, string> = {
   'supabase-mcp-lite': '🗄️'
 };
 
+export const CUSTOM_MCP_ICONS = [
+  { name: 'box', icon: '📦', label: 'Box' },
+  { name: 'database', icon: '🗄️', label: 'Database' },
+  { name: 'server', icon: '🖥️', label: 'Server' },
+  { name: 'code', icon: '💻', label: 'Code' },
+  { name: 'cloud', icon: '☁️', label: 'Cloud' },
+  { name: 'api', icon: '🔌', label: 'API' },
+  { name: 'tools', icon: '🔧', label: 'Tools' },
+  { name: 'cog', icon: '⚙️', label: 'Settings' },
+  { name: 'rocket', icon: '🚀', label: 'Rocket' },
+  { name: 'lightning', icon: '⚡', label: 'Lightning' },
+  { name: 'chart', icon: '📊', label: 'Chart' },
+  { name: 'globe', icon: '🌐', label: 'Globe' },
+  { name: 'brain', icon: '🧠', label: 'AI/Brain' },
+  { name: 'robot', icon: '🤖', label: 'Bot' },
+  { name: 'fitness', icon: '💪', label: 'Fitness' },
+  { name: 'health', icon: '❤️', label: 'Health' },
+  { name: 'sports', icon: '⚽', label: 'Sports' },
+  { name: 'music', icon: '🎵', label: 'Music' },
+  { name: 'video', icon: '🎬', label: 'Video' },
+  { name: 'camera', icon: '📷', label: 'Camera' },
+  { name: 'shopping', icon: '🛒', label: 'Shopping' },
+  { name: 'money', icon: '💰', label: 'Finance' },
+  { name: 'calendar', icon: '📅', label: 'Calendar' },
+  { name: 'email', icon: '📧', label: 'Email' },
+  { name: 'chat', icon: '💬', label: 'Chat' },
+  { name: 'file', icon: '📄', label: 'File' },
+  { name: 'book', icon: '📚', label: 'Book' },
+  { name: 'education', icon: '🎓', label: 'Education' },
+  { name: 'travel', icon: '✈️', label: 'Travel' },
+  { name: 'food', icon: '🍔', label: 'Food' }
+];
+
 export const MCP_CAPABILITIES: Record<string, string[]> = {
   'news': ['get_headlines', 'search_news', 'get_category_news', 'get_rss_feed'],
   'weather': ['get_current_weather', 'get_forecast', 'get_weather_alerts'],

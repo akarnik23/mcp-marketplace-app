@@ -7,14 +7,17 @@ import os
 from dotenv import load_dotenv
 import concurrent.futures
 import requests
+import json
+import asyncio
+
+# Load environment variables from .env file FIRST
+load_dotenv()
+
 from render_client import RenderClient
-from database import get_db, User, Deployment, APIKey, encrypt_value, decrypt_value
+from database import get_db, User, Deployment, APIKey, CustomMCP, encrypt_value, decrypt_value
 from sqlalchemy.orm import Session
 from auth import create_access_token, verify_token
 from smithery_integration import get_smithery_mcps_cached, search_smithery_mcps
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Create FastAPI app
 app = FastAPI(title="MCP Marketplace API", version="1.0.0")
@@ -44,14 +47,71 @@ GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/au
 # Cache disabled - was causing 500 errors
 
 
+async def fetch_mcp_tools(mcp_url: str) -> list:
+    """
+    Fetch available tools from a FastMCP server using the FastMCP client.
+    Returns list of tool names.
+    """
+    try:
+        from fastmcp import Client
+        
+        print(f"Attempting to connect to FastMCP server at {mcp_url}/mcp")
+        # Connect to the FastMCP server
+        async with Client(f"{mcp_url}/mcp") as client:
+            print(f"Connected to FastMCP server, listing tools...")
+            tools = await client.list_tools()
+            tool_names = [tool.name for tool in tools]
+            return tool_names
+            
+    except Exception as e:
+        print(f"Error fetching tools from {mcp_url}: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
+    """Fetch tools asynchronously and update the database"""
+    try:
+        # Wait a bit for the service to start up
+        await asyncio.sleep(10)
+        
+        # Fetch tools
+        tools = await fetch_mcp_tools(mcp_url)
+        
+        # Create a new database session for this async task
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            # Update the database
+            custom_mcp = db.query(CustomMCP).filter(CustomMCP.id == custom_mcp_id).first()
+            if custom_mcp:
+                custom_mcp.tools_list = json.dumps(tools)
+                db.commit()
+        finally:
+            db.close()
+            
+    except Exception as e:
+        # Log error but don't fail the main request
+        print(f"Failed to fetch tools async for {custom_mcp_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
 def get_service_status(service_id: str, service_url: str, render_client: RenderClient) -> str:
     """
     Get the status of a service using hybrid approach (Render API + HTTP check)
-    Returns: 'live', 'sleeping', 'deploying', or 'error'
+    Returns: 'live', 'sleeping', 'deploying', 'error', or 'suspended'
     """
     
     try:
-        # First check deployment status from Render API
+        # First check if service is suspended
+        service_info = render_client.get_service(service_id)
+        service_data = service_info.get("service", service_info)
+        service_status = service_data.get("suspended", "not_suspended")
+        
+        if service_status == "suspended":
+            return "suspended"
+        
+        # Then check deployment status from Render API
         deploy_status = render_client.get_latest_deployment_status(service_id)
         render_status = deploy_status.get("status", "unknown")
         
@@ -100,19 +160,19 @@ MCP_TEMPLATES = {
     "github": {
         "name": "GitHub MCP",
         "description": "GitHub repositories and issues",
-        "required_keys": ["github_token"],
+        "required_keys": ["GITHUB_TOKEN"],
         "template": "github_template"
     },
     "reddit": {
         "name": "Reddit MCP",
         "description": "Reddit posts and search",
-        "required_keys": ["reddit_client_id", "reddit_client_secret"],
+        "required_keys": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
         "template": "reddit_template"
     },
     "spotify": {
         "name": "Spotify MCP",
         "description": "Music search and artist data",
-        "required_keys": ["spotify_client_id", "spotify_client_secret"],
+        "required_keys": ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET"],
         "template": "spotify_template"
     },
     "hackernews": {
@@ -297,9 +357,39 @@ async def detect_user_services(
         
         # Get all services from user's Render account
         services_response = render_client.list_services()
-        # The API returns an array of objects with 'service' property
-        user_services = [item.get("service", {}) for item in services_response if isinstance(services_response, list)]
         
+        # The API returns an array of objects with 'service' property
+        all_services = [item.get("service", {}) for item in services_response if isinstance(services_response, list)]
+        
+        # Filter to only include MCP services (exclude marketplace backend, databases, etc.)
+        def is_mcp_service(service):
+            name = service.get('name', '').lower()
+            repo = service.get('repo', '').lower()
+            
+            # Exclude marketplace backend
+            if 'marketplace' in name or 'marketplace' in repo:
+                return False
+            
+            # Exclude databases and other non-MCP services
+            if any(exclude_word in name for exclude_word in ['database', 'postgres', 'redis', 'mysql']):
+                return False
+            
+            # Include services that look like MCPs
+            mcp_indicators = [
+                'mcp',  # Contains 'mcp' in name
+                'fastmcp',  # FastMCP template
+                'server',  # Generic server (could be MCP)
+            ]
+            
+            # Check if service has MCP indicators
+            has_mcp_indicator = any(indicator in name for indicator in mcp_indicators)
+            
+            # Also check repo URL for MCP indicators
+            has_mcp_repo = any(indicator in repo for indicator in ['mcp', 'fastmcp'])
+            
+            return has_mcp_indicator or has_mcp_repo
+        
+        user_services = [service for service in all_services if is_mcp_service(service)]
         
         # Detect which MCPs are available
         detected_mcps = {}
@@ -338,10 +428,25 @@ async def detect_user_services(
             
             template_services[template_id] = mcp_services
         
-        # Second pass: Check ALL services in parallel (not per-template)
+        # Collect custom MCPs for status checking
+        custom_mcps_db = db.query(CustomMCP).filter(CustomMCP.user_id == user_id).all()
+        custom_mcp_services = []
+        
+        for custom_mcp in custom_mcps_db:
+            custom_mcp_services.append({
+                "id": custom_mcp.render_service_id,
+                "name": custom_mcp.name,
+                "url": custom_mcp.mcp_url,
+                "status": "unknown",
+                "custom_mcp_id": custom_mcp.id,  # Track the custom MCP ID
+                "is_custom": True
+            })
+        
+        # Second pass: Check ALL services in parallel (template + custom)
         all_services = []
         for services_list in template_services.values():
             all_services.extend(services_list)
+        all_services.extend(custom_mcp_services)  # Add custom MCPs to parallel check
         
         if all_services:
             def check_service_status(service):
@@ -363,23 +468,37 @@ async def detect_user_services(
                     except Exception as e:
                         print(f"Service check failed: {e}")
                 
-                # Group services back by template_id
+                # Group services back by template_id and separate custom MCPs
                 services_by_template = {}
+                custom_mcps_with_status = []
+                
                 for service in completed_services:
-                    template_id = service.pop("template_id")  # Remove template_id before returning
-                    if template_id not in services_by_template:
-                        services_by_template[template_id] = []
-                    services_by_template[template_id].append(service)
+                    if service.get("is_custom"):
+                        # This is a custom MCP - keep it separate
+                        custom_mcp_id = service.pop("custom_mcp_id")
+                        service.pop("is_custom")
+                        service["custom_mcp_id"] = custom_mcp_id  # Add it back for frontend
+                        custom_mcps_with_status.append(service)
+                    else:
+                        # This is a template MCP
+                        template_id = service.pop("template_id")  # Remove template_id before returning
+                        if template_id not in services_by_template:
+                            services_by_template[template_id] = []
+                        services_by_template[template_id].append(service)
         else:
             services_by_template = {}
+            custom_mcps_with_status = []
         
         # Third pass: Build detected_mcps with status-checked services
         for template_id, template_info in MCP_TEMPLATES.items():
             mcp_services = services_by_template.get(template_id, [])
             
             if mcp_services:
+                # Check if any service is actually running (not suspended or sleeping)
+                has_running_service = any(service.get("status") in ["live", "deploying"] for service in mcp_services)
+                
                 detected_mcps[template_id] = {
-                    "available": True,
+                    "available": has_running_service,  # Only available if at least one service is running
                     "services": mcp_services,
                     "template": template_info
                 }
@@ -391,10 +510,31 @@ async def detect_user_services(
                     "setup_url": f"https://render.com/deploy?repo=https://github.com/akarnik23/mcp-{template_id}"
                 }
         
+        # Build custom MCPs with additional data from database
+        custom_mcps_result = []
+        for custom_mcp_status in custom_mcps_with_status:
+            # Find the corresponding custom MCP in database
+            custom_mcp_db = next((mcp for mcp in custom_mcps_db if str(mcp.id) == custom_mcp_status.get("custom_mcp_id")), None)
+            if custom_mcp_db:
+                custom_mcps_result.append({
+                    "id": str(custom_mcp_db.id),
+                    "name": custom_mcp_db.name,
+                    "description": custom_mcp_db.description,
+                    "icon_name": custom_mcp_db.icon_name,
+                    "mcp_url": custom_mcp_db.mcp_url,
+                    "tools": json.loads(custom_mcp_db.tools_list) if custom_mcp_db.tools_list else [],
+                    "required_keys": json.loads(custom_mcp_db.required_keys) if custom_mcp_db.required_keys else [],
+                    "render_service_id": custom_mcp_db.render_service_id,
+                    "status": custom_mcp_status.get("status", "unknown"),  # Real-time status
+                    "created_at": custom_mcp_db.created_at.isoformat() if custom_mcp_db.created_at else None
+                })
+        
         return {
             "user_id": str(user.id),
             "detected_mcps": detected_mcps,
-            "total_services": len(user_services)
+            "custom_mcps": custom_mcps_result,  # Custom MCPs with real-time status
+            "total_services": len(user_services),
+            "all_services": user_services  # Include all services for custom MCP modal
         }
         
     except Exception as e:
@@ -448,6 +588,21 @@ async def deploy_mcp(
         service_id = request.service_id
         if not service_id:
             raise HTTPException(status_code=400, detail="Service ID is required")
+        
+        # Check if service is suspended and resume it first
+        try:
+            service_info = render_client.get_service(service_id)
+            service_data = service_info.get("service", service_info)
+            service_status = service_data.get("suspended", "not_suspended")
+            
+            if service_status == "suspended":
+                print(f"Service {service_id} is suspended, resuming before deploy...")
+                render_client.resume_service(service_id)
+                # Wait a bit for the service to start up
+                await asyncio.sleep(5)
+        except Exception as e:
+            print(f"Could not check/resume service {service_id}: {e}")
+            # Continue anyway - maybe the service is already running
         
         # Deploy to the existing service
         service_data = render_client.deploy_to_existing_service(service_id)
@@ -881,6 +1036,308 @@ async def get_user_deployments(
         }
     
     return {"deployments": deployment_info}
+
+# Custom MCP Endpoints
+
+class AddCustomMCPRequest(BaseModel):
+    service_id: str
+    name: str
+    description: str
+    icon_name: str
+    render_api_key: str
+
+@app.post("/mcps/custom")
+async def add_custom_mcp(
+    request: AddCustomMCPRequest,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Add a custom MCP from user's Render account"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    try:
+        # Check if this service is already added as custom MCP
+        existing = db.query(CustomMCP).filter(
+            CustomMCP.user_id == user_id,
+            CustomMCP.render_service_id == request.service_id
+        ).first()
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="This service is already added as a custom MCP")
+        
+        # Create Render client
+        render_client = RenderClient(request.render_api_key)
+        
+        # Get service info from Render
+        service_info = render_client.get_service(request.service_id)
+        # The get_service endpoint returns the service directly (not wrapped in array like list_services)
+        service_data = service_info.get("service", service_info)
+        mcp_url = service_data.get("serviceDetails", {}).get("url", "")
+        
+        if not mcp_url:
+            raise HTTPException(status_code=400, detail="Could not get service URL from Render")
+        
+        # Check if service is suspended and wake it up if needed
+        service_status = service_data.get("suspended", "not_suspended")
+        if service_status == "suspended":
+            try:
+                # First resume the service to unsuspend it
+                render_client.resume_service(request.service_id)
+                
+                # Wait a bit for the service to start up (Render can take 30-60 seconds)
+                await asyncio.sleep(10)
+            except Exception as e:
+                # Continue anyway, maybe the service will wake up naturally
+                pass
+        
+        # Fetch environment variable keys from Render
+        env_var_keys = []
+        try:
+            env_var_keys = render_client.get_service_env_var_keys(request.service_id)
+            print(f"Fetched env var keys for {request.service_id}: {env_var_keys}")
+        except Exception as e:
+            # If we can't fetch env vars, just continue with empty list
+            print(f"Failed to fetch env var keys for {request.service_id}: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Create custom MCP record immediately (tools will be fetched async)
+        custom_mcp = CustomMCP(
+            user_id=user_id,
+            name=request.name,
+            description=request.description,
+            icon_name=request.icon_name,
+            render_service_id=request.service_id,
+            mcp_url=mcp_url,
+            tools_list="[]",  # Empty initially, will be populated async
+            required_keys=json.dumps(env_var_keys)  # Env var keys from Render
+        )
+        
+        db.add(custom_mcp)
+        db.commit()
+        db.refresh(custom_mcp)
+        
+        # Fetch tools asynchronously in the background (don't pass db session)
+        asyncio.create_task(fetch_and_update_tools_async(custom_mcp.id, mcp_url))
+        
+        return {
+            "id": str(custom_mcp.id),
+            "name": custom_mcp.name,
+            "description": custom_mcp.description,
+            "icon_name": custom_mcp.icon_name,
+            "mcp_url": mcp_url,
+            "render_service_id": request.service_id,
+            "message": "Custom MCP added successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add custom MCP: {str(e)}")
+
+@app.get("/mcps/custom")
+async def get_custom_mcps(
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Get all custom MCPs for the authenticated user"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get custom MCPs
+    custom_mcps = db.query(CustomMCP).filter(CustomMCP.user_id == user_id).all()
+    
+    result = []
+    for mcp in custom_mcps:
+        result.append({
+            "id": str(mcp.id),
+            "name": mcp.name,
+            "description": mcp.description,
+            "icon_name": mcp.icon_name,
+            "mcp_url": mcp.mcp_url,
+            "tools": json.loads(mcp.tools_list) if mcp.tools_list else [],
+            "required_keys": json.loads(mcp.required_keys) if mcp.required_keys else [],
+            "render_service_id": mcp.render_service_id,
+            "created_at": mcp.created_at.isoformat() if mcp.created_at else None
+        })
+    
+    return {"custom_mcps": result, "total": len(result)}
+
+class UpdateCustomMCPRequest(BaseModel):
+    name: str = None
+    description: str = None
+    icon_name: str = None
+
+@app.patch("/mcps/custom/{custom_mcp_id}")
+async def update_custom_mcp(
+    custom_mcp_id: str,
+    request: UpdateCustomMCPRequest,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Update a custom MCP"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get custom MCP
+    custom_mcp = db.query(CustomMCP).filter(
+        CustomMCP.id == custom_mcp_id,
+        CustomMCP.user_id == user_id
+    ).first()
+    
+    if not custom_mcp:
+        raise HTTPException(status_code=404, detail="Custom MCP not found")
+    
+    # Update fields
+    if request.name is not None:
+        custom_mcp.name = request.name
+    if request.description is not None:
+        custom_mcp.description = request.description
+    if request.icon_name is not None:
+        custom_mcp.icon_name = request.icon_name
+    
+    db.commit()
+    db.refresh(custom_mcp)
+    
+    return {
+        "id": str(custom_mcp.id),
+        "name": custom_mcp.name,
+        "description": custom_mcp.description,
+        "icon_name": custom_mcp.icon_name,
+        "message": "Custom MCP updated successfully"
+    }
+
+@app.delete("/mcps/custom/{custom_mcp_id}")
+async def delete_custom_mcp(
+    custom_mcp_id: str,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Delete a custom MCP from database"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get custom MCP
+    custom_mcp = db.query(CustomMCP).filter(
+        CustomMCP.id == custom_mcp_id,
+        CustomMCP.user_id == user_id
+    ).first()
+    
+    if not custom_mcp:
+        raise HTTPException(status_code=404, detail="Custom MCP not found")
+    
+    # Delete from database
+    db.delete(custom_mcp)
+    db.commit()
+    
+    return {"message": "Custom MCP deleted successfully"}
+
+@app.post("/mcps/custom/{custom_mcp_id}/refresh-tools")
+async def refresh_custom_mcp_tools(
+    custom_mcp_id: str,
+    authorization: str = Header(None, alias="Authorization"),
+    db: Session = Depends(get_db)
+):
+    """Refresh tools list for a custom MCP"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        user_id = verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Get custom MCP
+    custom_mcp = db.query(CustomMCP).filter(
+        CustomMCP.id == custom_mcp_id,
+        CustomMCP.user_id == user_id
+    ).first()
+    
+    if not custom_mcp:
+        raise HTTPException(status_code=404, detail="Custom MCP not found")
+    
+    # Fetch fresh tools from the MCP server
+    try:
+        tools = await fetch_mcp_tools(custom_mcp.mcp_url)
+        
+        # Update the database
+        custom_mcp.tools_list = json.dumps(tools)
+        db.commit()
+        
+        return {
+            "message": "Tools refreshed successfully",
+            "tools": tools
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to refresh tools: {str(e)}")
+
+class SuspendServiceRequest(BaseModel):
+    render_api_key: str
+
+@app.post("/mcps/services/{service_id}/suspend")
+async def suspend_service(
+    service_id: str,
+    request: SuspendServiceRequest,
+    authorization: str = Header(None, alias="Authorization")
+):
+    """Suspend a service on Render"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify JWT token
+    try:
+        token = authorization.replace("Bearer ", "")
+        verify_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    try:
+        # Create Render client
+        render_client = RenderClient(request.render_api_key)
+        
+        # Suspend the service
+        render_client.suspend_service(service_id)
+        
+        return {"message": "Service suspended successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to suspend service: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

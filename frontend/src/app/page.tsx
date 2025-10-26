@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Zap, Wrench, ExternalLink, Github } from 'lucide-react';
+import { Zap, Wrench, ExternalLink, Github, Plus, X } from 'lucide-react';
 import Image from 'next/image';
-import { MCPTemplate, UserServiceData, DeploymentStatuses, EnvVars, ShowEnvVars, SmitheryMCP } from './types';
-import { ERROR_MESSAGES, MCP_ICONS } from './constants';
+import { MCPTemplate, UserServiceData, DeploymentStatuses, DeploymentStatus, EnvVars, ShowEnvVars, SmitheryMCP, CustomMCP, MCPService } from './types';
+import { ERROR_MESSAGES, MCP_ICONS, CUSTOM_MCP_ICONS, POKE_CONNECTIONS_URL } from './constants';
 import { useAuth } from './hooks/useAuth';
 import { useRenderApiKey } from './hooks/useRenderApiKey';
-import { apiRequest } from './utils/api';
+import { apiRequest, copyToClipboard, openExternalLink } from './utils/api';
 import { MCPCard } from './components/MCPCard';
 import { SmitheryMCPCard } from './components/SmitheryMCPCard';
+import { AddCustomMCPModal } from './components/AddCustomMCPModal';
 
 export default function Home() {
   const { user, loading: authLoading, logout, startGitHubAuth } = useAuth();
@@ -41,6 +42,12 @@ export default function Home() {
   const [wakingStartTimes, setWakingStartTimes] = useState<Record<string, number>>({});
   const wakeIntervals = useRef<Record<string, NodeJS.Timeout>>({});
   const wakeTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Custom MCP state
+  const [customMcps, setCustomMcps] = useState<CustomMCP[]>([]);
+  const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+  const [allRenderServices, setAllRenderServices] = useState<MCPService[]>([]);
+  const [refreshingTools, setRefreshingTools] = useState<Set<string>>(new Set());
 
 
   // Update timestamp display every minute
@@ -89,6 +96,39 @@ export default function Home() {
     }
   };
 
+  const fetchCustomMcps = async () => {
+    if (!user) return;
+    
+    try {
+      const response = await apiRequest('/mcps/custom');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setCustomMcps(data.custom_mcps || []);
+    } catch (error) {
+      console.error('Error fetching custom MCPs:', error);
+      setCustomMcps([]);
+    }
+  };
+
+  const fetchAllRenderServices = async () => {
+    if (!renderApiKey) return;
+    
+    try {
+      const detectedServices = await detectUserServices(renderApiKey);
+      if (detectedServices) {
+        // Use all_services from the response instead of just detected MCP services
+        const allServices = detectedServices.all_services || [];
+        setAllRenderServices(allServices);
+      }
+    } catch (error) {
+      console.error('Error fetching Render services:', error);
+    }
+  };
+
   const detectUserServices = useCallback(async (apiKey: string) => {
     setDetectingServices(true);
     try {
@@ -106,7 +146,7 @@ export default function Home() {
       }
       
       const data = await response.json();
-      return data.detected_mcps;
+      return data; // Return full response instead of just detected_mcps
     } catch (error) {
       console.error('Error detecting services:', error);
       if (error instanceof Error && error.message === 'INVALID_API_KEY') {
@@ -136,11 +176,11 @@ export default function Home() {
       if (renderApiKey) {
         const detectedServices = await detectUserServices(renderApiKey);
 
-        if (detectedServices) {
+        if (detectedServices && detectedServices.detected_mcps) {
           // Use the detected services to show correct statuses
           const deploymentMap: DeploymentStatuses = {};
 
-          Object.entries(detectedServices).forEach(([templateId, mcpData]) => {
+          Object.entries(detectedServices.detected_mcps).forEach(([templateId, mcpData]) => {
             const typedMcpData = mcpData as UserServiceData;
             if (typedMcpData.available && typedMcpData.services.length > 0) {
               const service = typedMcpData.services[0];
@@ -173,6 +213,11 @@ export default function Home() {
             }
           });
         }
+        
+        // Update custom MCPs with real-time status from Render API
+        if (detectedServices && detectedServices.custom_mcps) {
+          setCustomMcps(detectedServices.custom_mcps);
+        }
       }
     } catch (error) {
       console.error('Error loading deployments:', error);
@@ -188,16 +233,18 @@ export default function Home() {
       // Then load Smithery MCPs
       await fetchSmitheryMcps();
       
-      // Finally load deployments (least critical)
+      // Load user-specific data
       if (user) {
-        await loadDeployments();
+        await loadDeployments(); // This now loads both template and custom MCPs with status
+        await fetchAllRenderServices();
       } else {
         setLastUpdated(null);
+        setCustomMcps([]);
       }
     };
     
     loadDataSequentially();
-  }, [user, loadDeployments]); // Now safe to include loadDeployments since detectUserServices is stable
+  }, [user]);
 
   const handleGitHubAuth = async () => {
     try {
@@ -379,8 +426,10 @@ export default function Home() {
 
       try {
         const detectedServices = await detectUserServices(renderApiKey);
-        if (detectedServices && detectedServices[templateKey]) {
-          const serviceData = detectedServices[templateKey] as UserServiceData;
+        
+        // Check if this is a template MCP
+        if (detectedServices && detectedServices.detected_mcps && detectedServices.detected_mcps[templateKey]) {
+          const serviceData = detectedServices.detected_mcps[templateKey] as UserServiceData;
           if (serviceData.available && serviceData.services.length > 0) {
             const service = serviceData.services[0];
             
@@ -398,6 +447,19 @@ export default function Home() {
               // Clear waking state
               cleanupWakeProcess(templateKey);
             }
+          }
+        }
+        // Check if this is a custom MCP
+        else if (detectedServices && detectedServices.custom_mcps) {
+          const customMcp = detectedServices.custom_mcps.find((mcp: CustomMCP) => mcp.id === templateKey);
+          if (customMcp && customMcp.status === 'live') {
+            // Update custom MCP status
+            setCustomMcps(prev => prev.map(mcp => 
+              mcp.id === templateKey ? { ...mcp, status: 'live' } : mcp
+            ));
+            
+            // Clear waking state
+            cleanupWakeProcess(templateKey);
           }
         }
       } catch (error) {
@@ -494,6 +556,133 @@ export default function Home() {
     }
   };
 
+  const handleAddCustomMCP = async (serviceId: string, name: string, description: string, iconName: string) => {
+    if (!user || !renderApiKey) return;
+    
+    try {
+      const response = await apiRequest('/mcps/custom', {
+        method: 'POST',
+        body: JSON.stringify({
+          service_id: serviceId,
+          name,
+          description,
+          icon_name: iconName,
+          render_api_key: renderApiKey
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to add custom MCP');
+      }
+      
+      // Refresh custom MCPs immediately
+      await loadDeployments();
+      alert('Custom MCP added successfully! Tools will be fetched in the background.');
+      
+      // Poll for tools update multiple times (service needs to wake up first)
+      setTimeout(async () => {
+        await loadDeployments();
+      }, 20000); // First poll after 20 seconds
+      
+      setTimeout(async () => {
+        await loadDeployments();
+      }, 35000); // Second poll after 35 seconds (in case service was slow to wake)
+    } catch (error) {
+      console.error('Error adding custom MCP:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteCustomMCP = async (customMcpId: string, serviceId?: string) => {
+    if (!user) return;
+    
+    try {
+      // Delete from database
+      const response = await apiRequest(`/mcps/custom/${customMcpId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete custom MCP');
+      }
+      
+      // Optionally suspend service on Render
+      if (serviceId && renderApiKey) {
+        try {
+          await apiRequest(`/mcps/services/${serviceId}/suspend`, {
+            method: 'POST',
+            body: JSON.stringify({ render_api_key: renderApiKey })
+          });
+        } catch (error) {
+          console.error('Failed to suspend service:', error);
+          // Continue anyway - MCP is deleted from our DB
+        }
+      }
+      
+      // Refresh everything to update status
+      await loadDeployments();
+    } catch (error) {
+      console.error('Error deleting custom MCP:', error);
+      alert('Failed to delete custom MCP');
+    }
+  };
+
+  const handleRefreshTools = async (customMcpId: string) => {
+    setRefreshingTools(prev => new Set(prev).add(customMcpId));
+    
+    try {
+      const response = await apiRequest(`/mcps/custom/${customMcpId}/refresh-tools`, {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to refresh tools');
+      }
+      
+      const data = await response.json();
+      
+      // Update custom MCP tools in state
+      setCustomMcps(prev => prev.map(mcp => 
+        mcp.id === customMcpId ? { ...mcp, tools: data.tools } : mcp
+      ));
+      
+    } catch (error) {
+      console.error('Error refreshing tools:', error);
+      alert('Failed to refresh tools');
+    } finally {
+      setRefreshingTools(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(customMcpId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleDeleteTemplateMCP = async (templateKey: string, serviceId?: string) => {
+    if (!user || !renderApiKey || !serviceId) return;
+    
+    try {
+      // Suspend the service on Render
+      await apiRequest(`/mcps/services/${serviceId}/suspend`, {
+        method: 'POST',
+        body: JSON.stringify({ render_api_key: renderApiKey })
+      });
+      
+      // Remove from local state
+      setDeployments(prev => {
+        const newDeployments = { ...prev };
+        delete newDeployments[templateKey];
+        return newDeployments;
+      });
+      
+      alert('Service suspended on Render');
+    } catch (error) {
+      console.error('Error suspending service:', error);
+      alert('Failed to suspend service');
+    }
+  };
+
   const deployMCP = async (templateKey: string, template: MCPTemplate) => {
     if (!user) return;
     
@@ -525,12 +714,12 @@ export default function Home() {
         try {
           const detectedServices = await detectUserServices(renderApiKey);
           
-          if (detectedServices) {
+          if (detectedServices && detectedServices.detected_mcps) {
             setUserServices(prev => ({
               ...prev,
-              [templateKey]: detectedServices[templateKey]
+              [templateKey]: detectedServices.detected_mcps[templateKey]
             }));
-            mcpData = detectedServices[templateKey];
+            mcpData = detectedServices.detected_mcps[templateKey];
           }
         } catch (error) {
           if (error instanceof Error && error.message === 'INVALID_API_KEY') {
@@ -848,14 +1037,26 @@ export default function Home() {
                 <p className="text-sm sm:text-base" style={{ color: '#718392' }}>Deploy MCPs to your Render account and connect to Poke</p>
                 </div>
                 {user && (
-                  <div className="flex flex-col items-start sm:items-end gap-1 self-end sm:self-auto">
-                    <button
-                      onClick={loadDeployments}
-                      className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
-                      style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
-                    >
-                      🔄 Refresh Status
-                    </button>
+                  <div className="flex flex-col items-start sm:items-end gap-2 self-end sm:self-auto">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowAddCustomModal(true)}
+                        disabled={!renderApiKey}
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: '#ffffff', color: '#203a54' }}
+                        title={!renderApiKey ? 'Add Render API key first' : 'Add custom MCP'}
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Custom MCP
+                      </button>
+                      <button
+                        onClick={loadDeployments}
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                        style={{ background: '#203a54', color: '#ffffff', border: '1px solid #718392' }}
+                      >
+                        🔄 Refresh Status
+                      </button>
+                    </div>
                     {lastUpdated && (
                       <span className="text-xs" style={{ color: '#718392' }}>
                         Last updated: {getTimeAgo(lastUpdated)}
@@ -866,6 +1067,7 @@ export default function Home() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {/* Template MCPs */}
                 {templates.map((template, index) => {
                   const templateKey = Object.keys(MCP_ICONS).find(key => {
                     const templateName = template.name.toLowerCase();
@@ -877,7 +1079,7 @@ export default function Home() {
                   
                   return (
                     <MCPCard
-                      key={index}
+                      key={`template-${index}`}
                       template={template}
                       templateKey={templateKey}
                       deployment={deployments[templateKey]}
@@ -893,6 +1095,62 @@ export default function Home() {
                       isWaking={wakingServices.has(templateKey)}
                       onWakeUp={wakeUpService}
                       wakingStartTime={wakingStartTimes[templateKey]}
+                      onDelete={handleDeleteTemplateMCP}
+                      isCustom={false}
+                    />
+                  );
+                })}
+
+                {/* Custom MCPs */}
+                {customMcps.map((customMcp) => {
+                  // Create template object for custom MCP
+                  const customTemplate: MCPTemplate = {
+                    name: customMcp.name,
+                    description: customMcp.description,
+                    required_keys: customMcp.required_keys,
+                    template: 'custom'
+                  };
+                  
+                  // Use custom MCP ID as templateKey
+                  const templateKey = customMcp.id;
+                  
+                  // Create deployment status from custom MCP data with real-time status
+                  const customDeployment: DeploymentStatus = {
+                    url: customMcp.mcp_url,
+                    status: customMcp.status || 'unknown', // Use real-time status from Render API
+                    service_id: customMcp.render_service_id
+                  };
+                  
+                  // Get icon emoji from CUSTOM_MCP_ICONS
+                  const iconOption = CUSTOM_MCP_ICONS.find(icon => icon.name === customMcp.icon_name);
+                  const customIconDataUrl = iconOption 
+                    ? `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><text y="36" font-size="36">${iconOption.icon}</text></svg>`)}`
+                    : `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><text y="36" font-size="36">📦</text></svg>')}`;
+                  
+                  return (
+                    <MCPCard
+                      key={`custom-${customMcp.id}`}
+                      template={customTemplate}
+                      templateKey={customMcp.id}
+                      deployment={customDeployment}
+                      userService={undefined}
+                      isDeploying={false}
+                      onDeploy={() => {}} // Custom MCPs are already deployed
+                      onToggleEnvVars={toggleEnvVars}
+                      showEnvVars={showEnvVars[customMcp.id] || false}
+                      onUpdateEnvVar={updateEnvVar}
+                      getEnvVarValue={getEnvVarValue}
+                      onUpdateDeploymentEnvVars={updateDeploymentEnvVars}
+                      envVarsUpdateSuccess={envVarsUpdatedSuccess[customMcp.id] || false}
+                      isWaking={wakingServices.has(customMcp.id)}
+                      onWakeUp={wakeUpService}
+                      wakingStartTime={wakingStartTimes[customMcp.id]}
+                      onDelete={(_, serviceId) => handleDeleteCustomMCP(customMcp.id, serviceId)}
+                      isCustom={true}
+                      customIcon={customIconDataUrl}
+                      customCapabilities={customMcp.tools}
+                      onRefreshTools={handleRefreshTools}
+                      isRefreshingTools={refreshingTools.has(customMcp.id)}
                     />
                   );
                 })}
@@ -1041,6 +1299,25 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Add Custom MCP Modal */}
+      <AddCustomMCPModal
+        isOpen={showAddCustomModal}
+        onClose={() => setShowAddCustomModal(false)}
+        onAdd={handleAddCustomMCP}
+        renderServices={allRenderServices}
+        excludeServiceIds={[
+          ...templates.map(t => {
+            const key = Object.keys(MCP_ICONS).find(k => {
+              const name = t.name.toLowerCase();
+              const keyName = k.toLowerCase();
+              return name === `${keyName} mcp` || name === `mcp ${keyName}` || name === keyName;
+            });
+            return deployments[key || '']?.service_id;
+          }).filter(Boolean) as string[],
+          ...customMcps.map(c => c.render_service_id)
+        ]}
+      />
     </div>
   );
 }
