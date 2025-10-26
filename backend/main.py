@@ -98,8 +98,8 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
         tools = await fetch_mcp_tools(mcp_url)
         
         if not tools:
-            # If first attempt failed, try again after another 60s
-            print(f"No tools fetched, waiting another 60s before retry...")
+            # If first attempt failed, try again after another 10s
+            print(f"No tools fetched, waiting another 10s before retry...")
             await asyncio.sleep(10)
             tools = await fetch_mcp_tools(mcp_url)
         
@@ -1130,8 +1130,25 @@ async def add_custom_mcp(
                 print(f"Could not resume service {request.service_id}: {e}")
                 pass
         
-        # Note: We don't actively wake up the service here to avoid rate limits
-        # The async task will retry with backoff, or user can manually wake via button
+        # Wake up the service by sending a simple HTTP request
+        # Use httpx with a short timeout and ignore errors (we just want to trigger wake-up)
+        try:
+            print(f"Sending wake-up request to {mcp_url}...")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Just ping the root endpoint - don't care about the response
+                try:
+                    response = await client.get(mcp_url)
+                    print(f"Wake-up request completed with status {response.status_code}")
+                except httpx.HTTPStatusError as e:
+                    # Status error (429, etc.) is okay - service is waking up
+                    print(f"Wake-up request returned {e.response.status_code} (may be rate limited)")
+                except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError) as e:
+                    # Connection/timeout errors are okay - service is sleeping
+                    print(f"Wake-up request failed (service waking): {e}")
+        except Exception as e:
+            # Don't block on wake-up failures
+            print(f"Wake-up request error (non-blocking): {e}")
+        
         print(f"Service {request.service_id} prepared, tools will be fetched in background")
         
         # Fetch environment variable keys from Render
