@@ -47,27 +47,43 @@ GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/au
 # Cache disabled - was causing 500 errors
 
 
-async def fetch_mcp_tools(mcp_url: str) -> list:
+async def fetch_mcp_tools(mcp_url: str, max_retries: int = 3) -> list:
     """
     Fetch available tools from a FastMCP server using the FastMCP client.
-    Returns list of tool names.
+    Returns list of tool names with retry logic for rate limiting.
     """
-    try:
-        from fastmcp import Client
-        
-        print(f"Attempting to connect to FastMCP server at {mcp_url}/mcp")
-        # Connect to the FastMCP server
-        async with Client(f"{mcp_url}/mcp") as client:
-            print(f"Connected to FastMCP server, listing tools...")
-            tools = await client.list_tools()
-            tool_names = [tool.name for tool in tools]
-            return tool_names
-            
-    except Exception as e:
-        print(f"Error fetching tools from {mcp_url}: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+    from fastmcp import Client
+    import httpx
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Attempting to connect to FastMCP server at {mcp_url}/mcp (attempt {attempt + 1}/{max_retries})")
+            # Connect to the FastMCP server
+            async with Client(f"{mcp_url}/mcp") as client:
+                print(f"Connected to FastMCP server, listing tools...")
+                tools = await client.list_tools()
+                tool_names = [tool.name for tool in tools]
+                print(f"Successfully fetched {len(tool_names)} tools")
+                return tool_names
+                
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                # Rate limited - wait and retry
+                wait_time = (attempt + 1) * 5  # Exponential backoff: 5s, 10s, 15s
+                print(f"Rate limited, waiting {wait_time}s before retry...")
+                await asyncio.sleep(wait_time)
+            else:
+                print(f"HTTP error {e.response.status_code}: {e}")
+                return []
+        except Exception as e:
+            print(f"Error fetching tools from {mcp_url}: {e}")
+            if attempt == max_retries - 1:
+                import traceback
+                traceback.print_exc()
+            return []
+    
+    print(f"Failed to fetch tools after {max_retries} attempts")
+    return []
 
 async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
     """Fetch tools asynchronously and update the database"""
