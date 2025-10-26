@@ -87,6 +87,41 @@ class RenderClient:
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to get Render service: {e}")
     
+    def get_service_env_var_keys(self, service_id: str) -> list:
+        """
+        Get environment variable keys (names) defined for a service
+        
+        Args:
+            service_id: ID of the service
+            
+        Returns:
+            List of environment variable key names
+        """
+        try:
+            # Use the dedicated env-vars endpoint
+            response = requests.get(
+                f"{self.base_url}/services/{service_id}/env-vars?limit=100",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            env_vars_data = response.json()
+            
+            # Extract just the keys, filtering out PORT and internal vars
+            env_var_keys = []
+            for item in env_vars_data:
+                env_var = item.get('envVar', {})
+                key = env_var.get('key', '')
+                if key and key != 'PORT':  # Filter out PORT as it's not user-configurable
+                    env_var_keys.append(key)
+            
+            return env_var_keys
+            
+        except Exception as e:
+            print(f"Error in get_service_env_var_keys: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
 
     def get_latest_deployment_status(self, service_id: str) -> Dict[str, Any]:
         """Get the status of the latest deployment for a service"""
@@ -133,9 +168,13 @@ class RenderClient:
             Update response
         """
         try:
-            # Get current service details first to preserve existing env vars
-            service_data = self.get_service(service_id)
-            service = service_data.get('service', {})
+            # Get current env vars using the dedicated endpoint
+            response = requests.get(
+                f"{self.base_url}/services/{service_id}/env-vars?limit=100",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            existing_env_vars_data = response.json()
             
             # Prepare the environment variables list
             env_vars_list = []
@@ -143,38 +182,24 @@ class RenderClient:
             # Build a map of keys being updated
             keys_being_updated = set(env_vars.keys())
             
-            # Add existing environment variables (preserve non-MCP ones and MCP ones not being updated)
-            existing_env_vars = service.get('envVars', [])
+            # Add existing environment variables (preserve all existing ones not being updated)
+            existing_env_vars = [item.get('envVar', {}) for item in existing_env_vars_data]
             for env_var in existing_env_vars:
                 key = env_var.get('key', '')
                 
-                # Check if this is an MCP variable
-                is_mcp_var = any([
-                    key.lower().startswith('github_'),
-                    key.lower().startswith('reddit_'),
-                    key.lower().startswith('spotify_'),
-                    key.upper() == 'GITHUB_TOKEN',
-                    key.upper().startswith('REDDIT_'),
-                    key.upper().startswith('SPOTIFY_')
-                ])
-                
-                # Keep if: (1) not an MCP var, OR (2) MCP var but NOT being updated now
-                if not is_mcp_var or key not in keys_being_updated:
-                    # Ensure existing env vars have proper structure
-                    if isinstance(env_var, dict) and 'key' in env_var and 'value' in env_var:
-                        env_vars_list.append({
-                            "key": str(env_var['key']),
-                            "value": str(env_var['value'])
-                        })
-            
-            # Add new/updated MCP environment variables
-            for key, value in env_vars.items():
-                # Ensure values are strings and handle special characters
-                if value is not None:
+                # Keep all existing env vars EXCEPT the ones being updated
+                if key not in keys_being_updated:
                     env_vars_list.append({
                         "key": str(key),
-                        "value": str(value)
+                        "value": str(env_var.get('value', ''))
                     })
+            
+            # Add new/updated environment variables
+            for key, value in env_vars.items():
+                env_vars_list.append({
+                    "key": str(key),
+                    "value": str(value) if value is not None else ""
+                })
             
             # Prepare the JSON payload - try different formats
             # Format 1: With envVars wrapper
@@ -241,6 +266,51 @@ class RenderClient:
             
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to restart service: {e}")
+    
+    def suspend_service(self, service_id: str) -> Dict[str, Any]:
+        """
+        Suspend a service on Render
+        
+        Args:
+            service_id: ID of the service to suspend
+            
+        Returns:
+            Suspend response
+        """
+        try:
+            response = requests.post(
+                f"{self.base_url}/services/{service_id}/suspend",
+                headers=self.headers
+            )
+            
+            if response.status_code not in [200, 201, 202]:
+                raise Exception(f"Render Suspend API error {response.status_code}: {response.text}")
+            
+            return response.json() if response.text.strip() else {"status": "suspended"}
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to suspend service: {e}")
+    
+    def resume_service(self, service_id: str) -> Dict[str, Any]:
+        """
+        Resume a suspended service on Render
+        
+        Args:
+            service_id: ID of the service to resume
+            
+        Returns:
+            Resume response
+        """
+        try:
+            response = requests.post(
+                f"{self.base_url}/services/{service_id}/resume",
+                headers=self.headers
+            )
+            if response.status_code not in [200, 201, 202]:
+                raise Exception(f"Render Resume API error {response.status_code}: {response.text}")
+            return response.json() if response.text.strip() else {"status": "resumed"}
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to resume service: {e}")
 
 # Map MCP types to their existing Render service IDs
 MCP_SERVICE_IDS = {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, CheckCircle, ExternalLink, Zap, Wrench, Github } from 'lucide-react';
+import { Copy, CheckCircle, ExternalLink, Zap, Wrench, Github, X } from 'lucide-react';
 import { MCPTemplate, UserServiceData, DeploymentStatus } from '../types';
 import { MCP_ICONS, MCP_CAPABILITIES, POKE_CONNECTIONS_URL } from '../constants';
 import { copyToClipboard, openExternalLink } from '../utils/api';
@@ -22,6 +22,12 @@ interface MCPCardProps {
   isWaking?: boolean;
   onWakeUp?: (templateKey: string, serviceUrl: string) => void;
   wakingStartTime?: number;
+  onDelete?: (templateKey: string, serviceId?: string) => void;
+  isCustom?: boolean;
+  customIcon?: string;
+  customCapabilities?: string[];
+  onRefreshTools?: (templateKey: string) => Promise<void>;
+  isRefreshingTools?: boolean;
 }
 
 export const MCPCard = ({
@@ -39,7 +45,13 @@ export const MCPCard = ({
   envVarsUpdateSuccess,
   isWaking = false,
   onWakeUp,
-  wakingStartTime
+  wakingStartTime,
+  onDelete,
+  isCustom = false,
+  customIcon,
+  customCapabilities,
+  onRefreshTools,
+  isRefreshingTools = false
 }: MCPCardProps) => {
   const [localCopiedUrl, setLocalCopiedUrl] = useState<string>('');
   const [elapsedTime, setElapsedTime] = useState<number>(0);
@@ -68,8 +80,17 @@ export const MCPCard = ({
   };
 
   const handleAddToPoke = (url: string) => {
-    handleCopy(url);
+    // Add /mcp suffix for Poke connection
+    const pokeUrl = url.endsWith('/') ? `${url}mcp` : `${url}/mcp`;
+    handleCopy(pokeUrl);
     openExternalLink(POKE_CONNECTIONS_URL);
+  };
+
+  const handleDelete = () => {
+    const serviceId = deployment?.service_id || userService?.services?.[0]?.id;
+    if (confirm(`Delete this MCP? ${isCustom ? 'It will be removed from your list.' : 'The service will be suspended on Render.'}`)) {
+      onDelete?.(templateKey, serviceId);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -120,17 +141,28 @@ export const MCPCard = ({
 
   return (
     <div className="rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow flex flex-col" 
-         style={{ background: '#203a54', border: '1px solid #718392' }}>
+         style={{ background: '#203a54', border: '1px solid #718392', position: 'relative' }}>
+      {/* Delete Button */}
+      {onDelete && (
+        <button
+          onClick={handleDelete}
+          className="absolute top-4 right-4 z-10 p-2 rounded-lg transition-all hover:bg-red-900/30 border border-transparent hover:border-red-700"
+          title="Delete MCP"
+        >
+          <X className="w-5 h-5 text-gray-400 hover:text-red-300" />
+        </button>
+      )}
+
       <div className="p-6 flex flex-col flex-1">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-4" style={{ paddingRight: onDelete ? '2rem' : '0' }}>
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={MCP_ICONS[templateKey]} alt="icon" className="w-9 h-9 rounded-md" />
+            <img src={customIcon || MCP_ICONS[templateKey]} alt="icon" className="w-9 h-9 rounded-md" />
             <div>
               <h3 className="text-xl font-bold text-white">{template.name}</h3>
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(deployment?.status || 'deploy')}`}>
-                {getStatusText(deployment?.status || 'deploy')}
+                {isCustom ? getStatusText(deployment?.status || 'deploy') : getStatusText(deployment?.status || 'deploy')}
               </span>
             </div>
           </div>
@@ -143,12 +175,31 @@ export const MCPCard = ({
         <div className="flex-1 flex flex-col">
           {/* Capabilities */}
           <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Wrench className="w-4 h-4" style={{ color: '#718392' }} />
-              <span className="text-sm font-medium text-white">Available Tools:</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Wrench className="w-4 h-4" style={{ color: '#718392' }} />
+                <span className="text-sm font-medium text-white">Available Tools:</span>
+              </div>
+              {isCustom && onRefreshTools && (
+                <button
+                  onClick={() => onRefreshTools(templateKey)}
+                  disabled={isRefreshingTools}
+                  className="p-1 rounded hover:bg-gray-700/50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Refresh tools from server"
+                >
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 ${isRefreshingTools ? 'animate-spin' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {MCP_CAPABILITIES[templateKey]?.map((capability) => (
+              {(customCapabilities || MCP_CAPABILITIES[templateKey] || []).map((capability) => (
                 <span
                   key={capability}
                   className="px-2 py-1 text-xs rounded-md font-mono"
@@ -270,10 +321,10 @@ export const MCPCard = ({
               <div className="rounded-md p-3 mb-4" style={{ background: '#000000', border: '1px solid #718392', minHeight: '4rem' }}>
                 <div className="flex items-center justify-between gap-2">
                   <code className="text-sm text-white font-mono flex-1 break-all">
-                    {deployment.url}
+                    {deployment.url.endsWith('/') ? `${deployment.url}mcp` : `${deployment.url}/mcp`}
                   </code>
                   <button
-                    onClick={() => handleCopy(deployment.url)}
+                    onClick={() => handleCopy(deployment.url.endsWith('/') ? `${deployment.url}mcp` : `${deployment.url}/mcp`)}
                     className={`flex-shrink-0 p-2 rounded-md transition-all border cursor-pointer ${
                       isCopied
                         ? 'bg-[rgba(46,160,67,0.2)] text-[#a7f3d0] border-[rgba(46,160,67,0.5)]'

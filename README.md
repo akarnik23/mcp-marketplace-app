@@ -6,6 +6,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 
 - 🔐 **GitHub OAuth Authentication** - Secure user authentication
 - 🚀 **One-Click Deployment** - Deploy MCPs to your Render account
+- 🛠️ **Custom MCP Support** - Add your own Render-hosted MCPs with dynamic tool detection
 - 🌐 **Smithery Integration** - Pre-hosted MCPs ready to connect to Poke
 - 🔑 **API Key Management** - Secure encrypted storage of user API keys with validation
 - 🌐 **Environment Variables** - Easy configuration of MCP environment variables
@@ -24,6 +25,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - **Encryption** - Fernet encryption for sensitive data
 - **Render API Integration** - Deploy and manage MCP services
 - **Smithery API Integration** - Dynamic MCP discovery and curation
+- **FastMCP Integration** - Dynamic tool detection from MCP servers
 - **Performance Caching** - In-memory caching for API calls and service status
 - **Parallel Processing** - Concurrent service status checks
 
@@ -34,6 +36,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - **GitHub OAuth** - User authentication flow
 - **Environment Variables UI** - Professional API key management with validation
 - **Smithery MCP Cards** - Pre-hosted MCP integration with search
+- **Custom MCP Management** - Add, configure, and manage your own MCPs
 - **Performance Optimized** - Sequential loading to prevent connection bottlenecks
 - **Mobile First** - Responsive breakpoints and iOS safe area handling
 
@@ -114,6 +117,12 @@ See `backend/env.example` for detailed configuration examples.
 - `GET /mcps/deployments` - Get user's deployments
 - `POST /render/validate-key` - Validate Render API key
 
+### Custom MCP Management
+- `POST /mcps/custom` - Add custom MCP from existing Render service
+- `GET /mcps/custom` - Get user's custom MCPs
+- `DELETE /mcps/custom/{custom_mcp_id}` - Delete custom MCP from markeplace and suspend service on Render
+- `POST /mcps/custom/{custom_mcp_id}/refresh-tools` - Refresh tools list for custom MCP
+
 ### Environment Variables
 - `GET /mcps/deployments/{deployment_id}/env-vars` - Get masked env vars for a deployment
 - `POST /mcps/deployments/{deployment_id}/env-vars` - Update deployment env vars (requires deployment_id)
@@ -133,6 +142,18 @@ See `backend/env.example` for detailed configuration examples.
 - **Reddit MCP** - Posts and search functionality
 - **Spotify MCP** - Music search and artist data
 - **HackerNews MCP** - Stories and search
+- **Wake Up Service** - Wake sleeping services with one click
+- **Resume Suspended Services** - Automatically resumes suspended services when redeploying
+
+### Custom MCPs (Your Own Services)
+- **Add Any MCP** - Connect your existing Render-hosted MCP servers
+- **Dynamic Tool Detection** - Automatically discovers available tools using FastMCP
+- **Environment Variable Management** - Configure your MCP's environment variables
+- **Real-time Status** - Live status monitoring (live, sleeping, deploying, suspended)
+- **Wake Up Service** - Wake sleeping services with one click
+- **Resume Suspended Services** - Automatically resumes suspended services when re-adding
+- **Custom Icons** - Choose from 30+ icons to represent your MCP
+- **Delete & Suspend** - Remove MCPs and suspend services on Render
 
 ### Smithery MCPs (Pre-hosted)
 - **Dynamic Discovery** - Curated from Smithery Registry

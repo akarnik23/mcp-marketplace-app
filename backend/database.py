@@ -56,6 +56,7 @@ class User(Base):
     
     # Relationships
     deployments = relationship("Deployment", back_populates="user")
+    custom_mcps = relationship("CustomMCP", back_populates="user")
 
 class MCPTemplate(Base):
     __tablename__ = "mcp_templates"
@@ -90,6 +91,28 @@ class Deployment(Base):
     user = relationship("User", back_populates="deployments")
     # No direct template relationship since template_id is a string reference to template name
     api_keys = relationship("APIKey", back_populates="deployment")
+
+class CustomMCP(Base):
+    __tablename__ = "custom_mcps"
+    
+    # Use String(36) for UUID storage (works with both SQLite and PostgreSQL)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    
+    # Foreign keys - use String(36) for UUID storage
+    user_id = Column(String(36), ForeignKey("users.id"), index=True)
+    
+    name = Column(String, index=True)
+    description = Column(Text)
+    icon_name = Column(String, default="box")  # Icon identifier
+    render_service_id = Column(String, unique=True, index=True)
+    mcp_url = Column(String)  # Full MCP URL
+    tools_list = Column(Text)  # JSON string of tool names
+    required_keys = Column(Text, default="[]")  # JSON string of required env var keys
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="custom_mcps")
 
 class APIKey(Base):
     __tablename__ = "api_keys"
