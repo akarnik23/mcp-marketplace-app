@@ -494,8 +494,8 @@ async def detect_user_services(
             mcp_services = services_by_template.get(template_id, [])
             
             if mcp_services:
-                # Check if any service is actually running (not suspended or sleeping)
-                has_running_service = any(service.get("status") in ["live", "deploying"] for service in mcp_services)
+                # Check if any service is available (live, deploying, or sleeping - but not suspended)
+                has_running_service = any(service.get("status") in ["live", "deploying", "sleeping"] for service in mcp_services)
                 
                 detected_mcps[template_id] = {
                     "available": has_running_service,  # Only available if at least one service is running
