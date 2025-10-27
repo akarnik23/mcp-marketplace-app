@@ -576,32 +576,19 @@ export default function Home() {
         throw new Error(error.detail || 'Failed to add custom MCP');
       }
 
-      console.log('[DEBUG] About to parse response JSON');
       const data = await response.json();
-      console.log('[DEBUG] Response data:', data);
-      console.log('[DEBUG] needs_wakeup:', data.needs_wakeup);
-      console.log('[DEBUG] mcp_url:', data.mcp_url);
 
-      console.log('[DEBUG] About to load deployments');
       // Refresh custom MCPs immediately
       await loadDeployments();
-      console.log('[DEBUG] Deployments loaded, showing alert');
       alert('Custom MCP added successfully! Tools will be fetched in the background.');
 
       // If service needs wake-up, send wake-up ping from browser (avoids Render's internal rate limiting)
       // Fire and forget - don't await so UI isn't blocked
       if (data.needs_wakeup && data.mcp_url) {
-        console.log('Sending wake-up ping from browser to avoid rate limiting...');
         fetch(data.mcp_url, {
           method: 'GET',
           mode: 'no-cors' // Avoid CORS issues, we just want to ping the service
-        }).then(() => {
-          console.log('Wake-up ping sent successfully');
-        }).catch((error) => {
-          console.log('Wake-up ping sent (error expected):', error);
         });
-      } else {
-        console.log('[DEBUG] Skipping wake-up ping. needs_wakeup:', data.needs_wakeup, 'mcp_url:', data.mcp_url);
       }
 
       // Poll for tools update after service has time to boot
