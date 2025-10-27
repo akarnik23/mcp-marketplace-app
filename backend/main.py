@@ -9,9 +9,37 @@ import concurrent.futures
 import requests
 import json
 import asyncio
+import logging
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 # Load environment variables from .env file FIRST
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Initialize Sentry for error tracking
+sentry_dsn = os.getenv("SENTRY_DSN")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[
+            FastApiIntegration(),
+            StarletteIntegration(),
+        ],
+        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
+        profiles_sample_rate=0.1,  # 10% profiling
+        environment=os.getenv("ENVIRONMENT", "production"),
+    )
+    logger.info("✓ Sentry initialized for error tracking")
+else:
+    logger.warning("⚠ SENTRY_DSN not set, error tracking disabled")
 
 from render_client import RenderClient
 from database import get_db, User, Deployment, APIKey, CustomMCP, encrypt_value, decrypt_value
@@ -78,6 +106,8 @@ async def fetch_mcp_tools(mcp_url: str, max_retries: int = 3) -> list:
         except Exception as e:
             print(f"Error fetching tools from {mcp_url}: {e}")
             if attempt == max_retries - 1:
+                # Only log to Sentry on final failure
+                sentry_sdk.capture_exception(e)
                 import traceback
                 traceback.print_exc()
             return []
@@ -88,12 +118,12 @@ async def fetch_mcp_tools(mcp_url: str, max_retries: int = 3) -> list:
 async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service_id: str, render_api_key: str):
     """Fetch tools asynchronously and update the database"""
     try:
-        print(f"Starting to fetch tools for {custom_mcp_id}...")
-        
+        logger.info(f"Starting to fetch tools for custom MCP {custom_mcp_id}")
+
         # Poll for service to become live (exactly like manual wake-up button)
         from render_client import RenderClient
         render_client = RenderClient(render_api_key)
-        
+
         # Don't ping from backend - Render rate-limits its own internal requests
         # The frontend will send the wake-up ping from the user's browser (external IP)
         # which avoids rate limiting
@@ -101,11 +131,11 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
         # Wait for service to fully boot (frontend will trigger wake-up)
         # Render typically needs 60s to boot from suspended state
         wait_time = 60
-        print(f"Waiting {wait_time}s for service to boot (frontend will send wake-up ping)...")
+        logger.info(f"Waiting {wait_time}s for service {service_id} to boot (frontend will send wake-up ping)")
         await asyncio.sleep(wait_time)
 
-        print(f"Service {service_id} should be ready, attempting to fetch tools...")
-        
+        logger.info(f"Service {service_id} should be ready, attempting to fetch tools")
+
         # Try fetching tools (service should already be live, but allow a few retries)
         tools = []
         for attempt in range(3):  # Try 3 times max
@@ -113,17 +143,17 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
                 wait_time = 5  # 5 seconds between retries
                 print(f"Waiting {wait_time}s before retry {attempt + 1}...")
                 await asyncio.sleep(wait_time)
-            
+
             print(f"Attempting to fetch tools from {mcp_url} (attempt {attempt + 1}/3)...")
             tools = await fetch_mcp_tools(mcp_url)
-            
+
             if tools:
-                print(f"Successfully fetched {len(tools)} tools on attempt {attempt + 1}")
+                logger.info(f"Successfully fetched {len(tools)} tools for {custom_mcp_id} on attempt {attempt + 1}")
                 break
-        
+
         if not tools:
-            print(f"Failed to fetch tools after 3 attempts for {custom_mcp_id}")
-        
+            logger.warning(f"Failed to fetch tools after 3 attempts for {custom_mcp_id}")
+
         # Create a new database session for this async task
         from database import SessionLocal
         db = SessionLocal()
@@ -133,13 +163,14 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
             if custom_mcp:
                 custom_mcp.tools_list = json.dumps(tools)
                 db.commit()
-                print(f"Successfully updated {len(tools) if tools else 0} tools for {custom_mcp_id}")
+                logger.info(f"Successfully updated database with {len(tools) if tools else 0} tools for {custom_mcp_id}")
         finally:
             db.close()
-            
+
     except Exception as e:
-        # Log error but don't fail the main request
-        print(f"Failed to fetch tools async for {custom_mcp_id}: {e}")
+        # Log error to Sentry and console
+        logger.error(f"Failed to fetch tools async for {custom_mcp_id}: {e}")
+        sentry_sdk.capture_exception(e)
         import traceback
         traceback.print_exc()
 
