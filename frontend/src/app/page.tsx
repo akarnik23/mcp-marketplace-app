@@ -610,8 +610,12 @@ export default function Home() {
       }, 65000); // Poll after 65 seconds (backend waits 60s before fetching)
     } catch (error) {
       console.error('[ERROR] Error adding custom MCP:', error);
-      console.error('[ERROR] Stack:', error.stack);
-      alert(`Error adding custom MCP: ${error.message}`);
+      if (error instanceof Error) {
+        console.error('[ERROR] Stack:', error.stack);
+        alert(`Error adding custom MCP: ${error.message}`);
+      } else {
+        alert('Error adding custom MCP');
+      }
       throw error;
     }
   };
