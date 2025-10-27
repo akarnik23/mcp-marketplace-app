@@ -94,53 +94,23 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
         from render_client import RenderClient
         render_client = RenderClient(render_api_key)
         
-        # Send initial HTTP ping to wake up the service (critical for Render to actually start it)
+        # Send initial HTTP ping to wake up the service
+        # May get 429 due to prior detect-services calls, but the ping still triggers Render to wake up
         print(f"Sending initial wake-up ping to {mcp_url}...")
         try:
-            response = requests.get(mcp_url, timeout=2)
-            print(f"Initial wake-up ping response: {response.status_code}")
+            response = requests.get(mcp_url, timeout=3)
+            print(f"Initial wake-up ping sent (got {response.status_code})")
         except Exception as e:
-            print(f"Initial wake-up ping sent (error expected for sleeping service): {e}")
+            print(f"Initial wake-up ping sent (got error, expected): {e}")
 
-        # Wait for service to start booting (Render needs time to spin up)
-        print(f"Waiting 30s for service {service_id} to start booting...")
-        await asyncio.sleep(30)
+        # Wait for service to fully boot AND for any rate limiting to clear
+        # Don't make ANY requests during this time - mimics manual "Wake Up" button behavior
+        # Render typically needs 45-60s to boot from suspended state
+        wait_time = 60
+        print(f"Waiting {wait_time}s for service to boot and rate limits to clear...")
+        await asyncio.sleep(wait_time)
 
-        # Poll for service to become live
-        print(f"Polling for service {service_id} to become live...")
-        max_wait_time = 90  # 1.5 minutes more (30s already waited)
-        check_interval = 15  # Check every 15 seconds to avoid rate limiting
-        elapsed_time = 30  # Already waited 30s
-
-        while elapsed_time < 120:  # Total 2 minutes
-            await asyncio.sleep(check_interval)
-            elapsed_time += check_interval
-            
-            # Check deployment status from Render API
-            try:
-                deploy_status = render_client.get_latest_deployment_status(service_id)
-                render_status = deploy_status.get("status", "unknown")
-                
-                print(f"Service {service_id} deployment status after {elapsed_time}s: {render_status}")
-                
-                # Render API says "live" when truly live OR when sleeping
-                # So we need to actually ping the service to confirm it's awake
-                if render_status == "live":
-                    # Ping the service once to confirm it's actually awake
-                    try:
-                        response = requests.get(mcp_url, timeout=2)
-                        if response.status_code in [200, 404, 405]:
-                            print(f"Service {service_id} is now live!")
-                            break
-                        else:
-                            print(f"Service returned {response.status_code}, not fully awake yet")
-                    except Exception as e:
-                        print(f"Service not responding yet: {e}")
-            except Exception as e:
-                print(f"Error checking status: {e}")
-        
-        if elapsed_time >= max_wait_time:
-            print(f"Service {service_id} did not become live within {max_wait_time}s")
+        print(f"Service {service_id} should be ready, attempting to fetch tools...")
         
         # Try fetching tools (service should already be live, but allow a few retries)
         tools = []
