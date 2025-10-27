@@ -97,17 +97,22 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
         # Send initial HTTP ping to wake up the service (critical for Render to actually start it)
         print(f"Sending initial wake-up ping to {mcp_url}...")
         try:
-            requests.get(mcp_url, timeout=2)
+            response = requests.get(mcp_url, timeout=2)
+            print(f"Initial wake-up ping response: {response.status_code}")
         except Exception as e:
-            print(f"Initial wake-up ping sent (response not important): {e}")
+            print(f"Initial wake-up ping sent (error expected for sleeping service): {e}")
+
+        # Wait for service to start booting (Render needs time to spin up)
+        print(f"Waiting 30s for service {service_id} to start booting...")
+        await asyncio.sleep(30)
 
         # Poll for service to become live
         print(f"Polling for service {service_id} to become live...")
-        max_wait_time = 120  # 2 minutes
-        check_interval = 5  # Check every 5 seconds
-        elapsed_time = 0
+        max_wait_time = 90  # 1.5 minutes more (30s already waited)
+        check_interval = 15  # Check every 15 seconds to avoid rate limiting
+        elapsed_time = 30  # Already waited 30s
 
-        while elapsed_time < max_wait_time:
+        while elapsed_time < 120:  # Total 2 minutes
             await asyncio.sleep(check_interval)
             elapsed_time += check_interval
             
