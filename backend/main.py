@@ -94,20 +94,14 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
         from render_client import RenderClient
         render_client = RenderClient(render_api_key)
         
-        # Send initial HTTP ping to wake up the service
-        # May get 429 due to prior detect-services calls, but the ping still triggers Render to wake up
-        print(f"Sending initial wake-up ping to {mcp_url}...")
-        try:
-            response = requests.get(mcp_url, timeout=3)
-            print(f"Initial wake-up ping sent (got {response.status_code})")
-        except Exception as e:
-            print(f"Initial wake-up ping sent (got error, expected): {e}")
+        # Don't ping from backend - Render rate-limits its own internal requests
+        # The frontend will send the wake-up ping from the user's browser (external IP)
+        # which avoids rate limiting
 
-        # Wait for service to fully boot AND for any rate limiting to clear
-        # Don't make ANY requests during this time - mimics manual "Wake Up" button behavior
-        # Render typically needs 45-60s to boot from suspended state
+        # Wait for service to fully boot (frontend will trigger wake-up)
+        # Render typically needs 60s to boot from suspended state
         wait_time = 60
-        print(f"Waiting {wait_time}s for service to boot and rate limits to clear...")
+        print(f"Waiting {wait_time}s for service to boot (frontend will send wake-up ping)...")
         await asyncio.sleep(wait_time)
 
         print(f"Service {service_id} should be ready, attempting to fetch tools...")
@@ -1203,7 +1197,8 @@ async def add_custom_mcp(
             "icon_name": custom_mcp.icon_name,
             "mcp_url": mcp_url,
             "render_service_id": request.service_id,
-            "message": "Custom MCP added successfully"
+            "message": "Custom MCP added successfully",
+            "needs_wakeup": True  # Always true - frontend should send wake-up ping from browser
         }
         
     except HTTPException:

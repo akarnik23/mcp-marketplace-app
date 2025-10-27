@@ -582,10 +582,24 @@ export default function Home() {
       await loadDeployments();
       alert('Custom MCP added successfully! Tools will be fetched in the background.');
 
-      // Poll for tools update
+      // If service needs wake-up, send wake-up ping from browser (avoids Render's internal rate limiting)
+      if (data.needs_wakeup && data.mcp_url) {
+        console.log('Sending wake-up ping from browser to avoid rate limiting...');
+        try {
+          await fetch(data.mcp_url, {
+            method: 'GET',
+            mode: 'no-cors' // Avoid CORS issues, we just want to ping the service
+          });
+          console.log('Wake-up ping sent successfully');
+        } catch (error) {
+          console.log('Wake-up ping sent (error expected):', error);
+        }
+      }
+
+      // Poll for tools update after service has time to boot
       setTimeout(async () => {
         await loadDeployments();
-      }, 20000); // Poll after 20 seconds
+      }, 65000); // Poll after 65 seconds (backend waits 60s before fetching)
     } catch (error) {
       console.error('Error adding custom MCP:', error);
       throw error;
