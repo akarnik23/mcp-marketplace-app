@@ -558,7 +558,7 @@ export default function Home() {
 
   const handleAddCustomMCP = async (serviceId: string, name: string, description: string, iconName: string) => {
     if (!user || !renderApiKey) return;
-    
+
     try {
       const response = await apiRequest('/mcps/custom', {
         method: 'POST',
@@ -570,24 +570,29 @@ export default function Home() {
           render_api_key: renderApiKey
         })
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to add custom MCP');
       }
-      
+
+      const data = await response.json();
+
       // Refresh custom MCPs immediately
       await loadDeployments();
       alert('Custom MCP added successfully! Tools will be fetched in the background.');
-      
-      // Poll for tools update multiple times (service needs to wake up first)
-      setTimeout(async () => {
-        await loadDeployments();
-      }, 20000); // First poll after 20 seconds
-      
-      setTimeout(async () => {
-        await loadDeployments();
-      }, 35000); // Second poll after 35 seconds (in case service was slow to wake)
+
+      // If service needs wake-up, automatically trigger it (just like the wake-up button)
+      if (data.needs_wakeup && data.mcp_url && data.id) {
+        console.log('Service needs wake-up, triggering wake-up automatically...');
+        // Use the custom MCP ID as the templateKey for wake-up tracking
+        await wakeUpService(data.id, data.mcp_url);
+      } else {
+        // If service doesn't need wake-up, still poll for tools update
+        setTimeout(async () => {
+          await loadDeployments();
+        }, 20000); // Poll after 20 seconds
+      }
     } catch (error) {
       console.error('Error adding custom MCP:', error);
       throw error;

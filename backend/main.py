@@ -94,28 +94,41 @@ async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service
         from render_client import RenderClient
         render_client = RenderClient(render_api_key)
         
+        # Poll for service to become live WITHOUT pinging the service (just use Render API)
         print(f"Polling for service {service_id} to become live...")
-        max_wait_time = 120  # 2 minutes (same as frontend)
-        check_interval = 5  # Check every 5 seconds (same as frontend)
+        max_wait_time = 120  # 2 minutes
+        check_interval = 5  # Check every 5 seconds
         elapsed_time = 0
         
         while elapsed_time < max_wait_time:
             await asyncio.sleep(check_interval)
             elapsed_time += check_interval
             
-            status = get_service_status(service_id, mcp_url, render_client)
-            print(f"Service {service_id} status after {elapsed_time}s: {status}")
-            
-            if status == "live":
-                print(f"Service {service_id} is now live!")
-                break
+            # Check deployment status from Render API
+            try:
+                deploy_status = render_client.get_latest_deployment_status(service_id)
+                render_status = deploy_status.get("status", "unknown")
+                
+                print(f"Service {service_id} deployment status after {elapsed_time}s: {render_status}")
+                
+                # Render API says "live" when truly live OR when sleeping
+                # So we need to actually ping the service to confirm it's awake
+                if render_status == "live":
+                    # Ping the service once to confirm it's actually awake
+                    try:
+                        response = requests.get(mcp_url, timeout=2)
+                        if response.status_code in [200, 404, 405]:
+                            print(f"Service {service_id} is now live!")
+                            break
+                        else:
+                            print(f"Service returned {response.status_code}, not fully awake yet")
+                    except Exception as e:
+                        print(f"Service not responding yet: {e}")
+            except Exception as e:
+                print(f"Error checking status: {e}")
         
         if elapsed_time >= max_wait_time:
             print(f"Service {service_id} did not become live within {max_wait_time}s")
-        
-        # Wait a moment for the service to be fully ready
-        print(f"Waiting 5s for service to be fully ready before fetching tools...")
-        await asyncio.sleep(5)
         
         # Try fetching tools (service should already be live, but allow a few retries)
         tools = []
@@ -1158,26 +1171,27 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Resume service if suspended (after delete, service is suspended)
+        # Check if service is suspended and resume if needed
         service_status = service_data.get("suspended", "not_suspended")
+        needs_wakeup = False
+
         if service_status == "suspended":
             try:
                 print(f"Service {request.service_id} is suspended, resuming...")
                 resume_result = render_client.resume_service(request.service_id)
                 print(f"Resume service result: {resume_result}")
+                needs_wakeup = True  # Resumed services need wake-up
             except Exception as e:
                 print(f"ERROR: Could not resume service {request.service_id}: {e}")
-        
-        # Send HTTP ping to wake up the service (exactly like manual wake-up button)
-        print(f"Sending HTTP ping to {mcp_url} (wake-up request)...")
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.get(mcp_url)
-                print(f"Wake-up ping sent")
-        except Exception as e:
-            print(f"Wake-up ping sent (errors ignored): {e}")
-        
-        print(f"Service {request.service_id} prepared, tools will be fetched in background (polling for live status)")
+                needs_wakeup = True  # Still need wake-up even if resume failed
+        else:
+            # Check if service is sleeping by checking its current status
+            current_status = get_service_status(request.service_id, mcp_url, render_client)
+            print(f"Service {request.service_id} current status: {current_status}")
+            if current_status in ["sleeping", "error", "offline"]:
+                needs_wakeup = True
+
+        print(f"Service {request.service_id} prepared, needs_wakeup={needs_wakeup}. Tools will be fetched in background after wake-up.")
         
         # Fetch environment variable keys from Render
         env_var_keys = []
@@ -1208,7 +1222,7 @@ async def add_custom_mcp(
         
         # Fetch tools asynchronously in the background
         asyncio.create_task(fetch_and_update_tools_async(custom_mcp.id, mcp_url, request.service_id, request.render_api_key))
-        
+
         return {
             "id": str(custom_mcp.id),
             "name": custom_mcp.name,
@@ -1216,7 +1230,8 @@ async def add_custom_mcp(
             "icon_name": custom_mcp.icon_name,
             "mcp_url": mcp_url,
             "render_service_id": request.service_id,
-            "message": "Custom MCP added successfully"
+            "message": "Custom MCP added successfully",
+            "needs_wakeup": needs_wakeup
         }
         
     except HTTPException:
