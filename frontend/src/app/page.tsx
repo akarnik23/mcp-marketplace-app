@@ -576,13 +576,16 @@ export default function Home() {
         throw new Error(error.detail || 'Failed to add custom MCP');
       }
 
+      console.log('[DEBUG] About to parse response JSON');
       const data = await response.json();
       console.log('[DEBUG] Response data:', data);
       console.log('[DEBUG] needs_wakeup:', data.needs_wakeup);
       console.log('[DEBUG] mcp_url:', data.mcp_url);
 
+      console.log('[DEBUG] About to load deployments');
       // Refresh custom MCPs immediately
       await loadDeployments();
+      console.log('[DEBUG] Deployments loaded, showing alert');
       alert('Custom MCP added successfully! Tools will be fetched in the background.');
 
       // If service needs wake-up, send wake-up ping from browser (avoids Render's internal rate limiting)
@@ -606,7 +609,9 @@ export default function Home() {
         await loadDeployments();
       }, 65000); // Poll after 65 seconds (backend waits 60s before fetching)
     } catch (error) {
-      console.error('Error adding custom MCP:', error);
+      console.error('[ERROR] Error adding custom MCP:', error);
+      console.error('[ERROR] Stack:', error.stack);
+      alert(`Error adding custom MCP: ${error.message}`);
       throw error;
     }
   };
