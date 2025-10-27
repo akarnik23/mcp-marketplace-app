@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Header, Depends
+from fastapi import FastAPI, HTTPException, status, Header, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -85,14 +85,35 @@ async def fetch_mcp_tools(mcp_url: str, max_retries: int = 3) -> list:
     print(f"Failed to fetch tools after {max_retries} attempts")
     return []
 
-async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
+async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str, service_id: str, render_api_key: str):
     """Fetch tools asynchronously and update the database"""
     try:
-        # Start trying to fetch tools after a short initial wait
-        # We'll try multiple times with backoff to handle cold starts
         print(f"Starting to fetch tools for {custom_mcp_id}...")
         
-        # Wait a moment for the service to be fully ready (already confirmed live above)
+        # Poll for service to become live (exactly like manual wake-up button)
+        from render_client import RenderClient
+        render_client = RenderClient(render_api_key)
+        
+        print(f"Polling for service {service_id} to become live...")
+        max_wait_time = 120  # 2 minutes (same as frontend)
+        check_interval = 5  # Check every 5 seconds (same as frontend)
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            await asyncio.sleep(check_interval)
+            elapsed_time += check_interval
+            
+            status = get_service_status(service_id, mcp_url, render_client)
+            print(f"Service {service_id} status after {elapsed_time}s: {status}")
+            
+            if status == "live":
+                print(f"Service {service_id} is now live!")
+                break
+        
+        if elapsed_time >= max_wait_time:
+            print(f"Service {service_id} did not become live within {max_wait_time}s")
+        
+        # Wait a moment for the service to be fully ready
         print(f"Waiting 5s for service to be fully ready before fetching tools...")
         await asyncio.sleep(5)
         
@@ -1113,7 +1134,17 @@ async def add_custom_mcp(
         ).first()
         
         if existing:
-            raise HTTPException(status_code=400, detail="This service is already added as a custom MCP")
+            print(f"Service {request.service_id} already exists as custom MCP, returning existing entry")
+            # Return existing entry instead of erroring
+            return {
+                "id": str(existing.id),
+                "name": existing.name,
+                "description": existing.description,
+                "icon_name": existing.icon_name,
+                "mcp_url": existing.mcp_url,
+                "render_service_id": existing.render_service_id,
+                "message": "Custom MCP already exists"
+            }
         
         # Create Render client
         render_client = RenderClient(request.render_api_key)
@@ -1127,64 +1158,36 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Resume service if suspended, then wait for it to become live
+        # Resume service if suspended
         service_status = service_data.get("suspended", "not_suspended")
         if service_status == "suspended":
             try:
                 # Resume the service if it's suspended
                 print(f"Service {request.service_id} is suspended, resuming...")
-                render_client.resume_service(request.service_id)
+                resume_result = render_client.resume_service(request.service_id)
+                print(f"Resume service result: {resume_result}")
                 
-                # Don't wait here - send wake-up request first, then poll
-                # (replicates manual "Wake Up Service" button flow)
-                    
+                # After resuming, restart the service to actually wake it up
+                print(f"Restarting service {request.service_id} to wake it up...")
+                restart_result = render_client.restart_service(request.service_id)
+                print(f"Restart service result: {restart_result}")
             except Exception as e:
-                # Continue anyway, maybe the service will wake up naturally
-                print(f"Could not resume or wait for service {request.service_id}: {e}")
+                # Log the error but continue
+                print(f"ERROR: Could not resume or restart service {request.service_id}: {e}")
                 import traceback
                 traceback.print_exc()
-                pass
+                # Continue anyway - maybe the service will wake up naturally
         
-        # Wake up the service by sending a simple HTTP request
-        # Use httpx with a short timeout and ignore errors (we just want to trigger wake-up)
+        # Send HTTP ping to actually trigger Render to start the service (just like manual wake-up button)
+        print(f"Sending HTTP ping to {mcp_url}...")
         try:
-            print(f"Sending wake-up request to {mcp_url}...")
             async with httpx.AsyncClient(timeout=5.0) as client:
-                # Just ping the root endpoint - don't care about the response
-                try:
-                    response = await client.get(mcp_url)
-                    print(f"Wake-up request completed with status {response.status_code}")
-                except httpx.HTTPStatusError as e:
-                    # Status error (429, etc.) is okay - service is waking up
-                    print(f"Wake-up request returned {e.response.status_code} (may be rate limited)")
-                except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError) as e:
-                    # Connection/timeout errors are okay - service is sleeping
-                    print(f"Wake-up request failed (service waking): {e}") 
+                await client.get(mcp_url)
+                print(f"HTTP ping sent successfully")
         except Exception as e:
-            # Don't block on wake-up failures
-            print(f"Wake-up request error (non-blocking): {e}")
+            print(f"HTTP ping sent (errors ignored): {e}")
         
-        # Poll for service to become live (exactly like manual wake-up button)
-        print(f"Polling for service {request.service_id} to become live...")
-        max_wait_time = 120  # 2 minutes (same as frontend)
-        check_interval = 5  # Check every 5 seconds (same as frontend)
-        elapsed_time = 0
-        
-        while elapsed_time < max_wait_time:
-            await asyncio.sleep(check_interval)
-            elapsed_time += check_interval
-            
-            status = get_service_status(request.service_id, mcp_url, render_client)
-            print(f"Service {request.service_id} status after {elapsed_time}s: {status}")
-            
-            if status == "live":
-                print(f"Service {request.service_id} is now live!")
-                break
-        
-        if elapsed_time >= max_wait_time:
-            print(f"Service {request.service_id} did not become live within {max_wait_time}s")
-        
-        print(f"Service {request.service_id} prepared, tools will be fetched in background")
+        print(f"Service {request.service_id} prepared, tools will be fetched in background (polling for live status)")
         
         # Fetch environment variable keys from Render
         env_var_keys = []
@@ -1213,8 +1216,8 @@ async def add_custom_mcp(
         db.commit()
         db.refresh(custom_mcp)
         
-        # Fetch tools asynchronously in the background (don't pass db session)
-        asyncio.create_task(fetch_and_update_tools_async(custom_mcp.id, mcp_url))
+        # Fetch tools asynchronously in the background
+        asyncio.create_task(fetch_and_update_tools_async(custom_mcp.id, mcp_url, request.service_id, request.render_api_key))
         
         return {
             "id": str(custom_mcp.id),
