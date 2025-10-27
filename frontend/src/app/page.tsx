@@ -591,10 +591,39 @@ export default function Home() {
         });
       }
 
-      // Poll for tools update after service has time to boot
-      setTimeout(async () => {
-        await loadDeployments();
-      }, 65000); // Poll after 65 seconds (backend waits 60s before fetching)
+      // Poll for tools update at increasing intervals to catch slower services
+      // Without triggering Render API rate limits (avoid frequent polling)
+      const customMcpId = data.id;
+      const pollIntervals = [30000, 60000, 90000, 120000]; // 30s, 60s, 90s, 120s (total: 5 min coverage)
+      let pollIndex = 0;
+
+      const scheduleNextPoll = () => {
+        if (pollIndex >= pollIntervals.length) {
+          console.log('[Tools Poll] All scheduled polls completed');
+          return;
+        }
+
+        const delay = pollIntervals[pollIndex];
+        pollIndex++;
+
+        setTimeout(async () => {
+          console.log(`[Tools Poll] Polling for tools update (attempt ${pollIndex}/${pollIntervals.length})...`);
+          await loadDeployments();
+
+          // Check if tools have been fetched (stop polling early if successful)
+          const updatedMcp = customMcps.find(mcp => mcp.id === customMcpId);
+          if (updatedMcp && updatedMcp.tools && updatedMcp.tools.length > 0) {
+            console.log(`[Tools Poll] Tools detected (${updatedMcp.tools.length} tools), stopping early`);
+            return;
+          }
+
+          // Schedule next poll
+          scheduleNextPoll();
+        }, delay);
+      };
+
+      // Start the polling chain
+      scheduleNextPoll();
     } catch (error) {
       console.error('[ERROR] Error adding custom MCP:', error);
       if (error instanceof Error) {
