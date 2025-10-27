@@ -583,17 +583,17 @@ export default function Home() {
       alert('Custom MCP added successfully! Tools will be fetched in the background.');
 
       // If service needs wake-up, send wake-up ping from browser (avoids Render's internal rate limiting)
+      // Fire and forget - don't await so UI isn't blocked
       if (data.needs_wakeup && data.mcp_url) {
         console.log('Sending wake-up ping from browser to avoid rate limiting...');
-        try {
-          await fetch(data.mcp_url, {
-            method: 'GET',
-            mode: 'no-cors' // Avoid CORS issues, we just want to ping the service
-          });
+        fetch(data.mcp_url, {
+          method: 'GET',
+          mode: 'no-cors' // Avoid CORS issues, we just want to ping the service
+        }).then(() => {
           console.log('Wake-up ping sent successfully');
-        } catch (error) {
+        }).catch((error) => {
           console.log('Wake-up ping sent (error expected):', error);
-        }
+        });
       }
 
       // Poll for tools update after service has time to boot
