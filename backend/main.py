@@ -1158,34 +1158,24 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Resume service if suspended
+        # Resume service if suspended (after delete, service is suspended)
         service_status = service_data.get("suspended", "not_suspended")
         if service_status == "suspended":
             try:
-                # Resume the service if it's suspended
                 print(f"Service {request.service_id} is suspended, resuming...")
                 resume_result = render_client.resume_service(request.service_id)
                 print(f"Resume service result: {resume_result}")
-                
-                # After resuming, restart the service to actually wake it up
-                print(f"Restarting service {request.service_id} to wake it up...")
-                restart_result = render_client.restart_service(request.service_id)
-                print(f"Restart service result: {restart_result}")
             except Exception as e:
-                # Log the error but continue
-                print(f"ERROR: Could not resume or restart service {request.service_id}: {e}")
-                import traceback
-                traceback.print_exc()
-                # Continue anyway - maybe the service will wake up naturally
+                print(f"ERROR: Could not resume service {request.service_id}: {e}")
         
-        # Send HTTP ping to actually trigger Render to start the service (just like manual wake-up button)
-        print(f"Sending HTTP ping to {mcp_url}...")
+        # Send HTTP ping to wake up the service (exactly like manual wake-up button)
+        print(f"Sending HTTP ping to {mcp_url} (wake-up request)...")
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 await client.get(mcp_url)
-                print(f"HTTP ping sent successfully")
+                print(f"Wake-up ping sent")
         except Exception as e:
-            print(f"HTTP ping sent (errors ignored): {e}")
+            print(f"Wake-up ping sent (errors ignored): {e}")
         
         print(f"Service {request.service_id} prepared, tools will be fetched in background (polling for live status)")
         
