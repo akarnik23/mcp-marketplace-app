@@ -88,20 +88,31 @@ async def fetch_mcp_tools(mcp_url: str, max_retries: int = 3) -> list:
 async def fetch_and_update_tools_async(custom_mcp_id: str, mcp_url: str):
     """Fetch tools asynchronously and update the database"""
     try:
-        # Wait longer for the service to fully wake up (Render can take 30-120 seconds to cold start)
-        # If service was sleeping, it needs time to wake up
-        print(f"Waiting 60s for service to wake up before fetching tools for {custom_mcp_id}...")
-        await asyncio.sleep(60)
+        # Start trying to fetch tools after a short initial wait
+        # We'll try multiple times with backoff to handle cold starts
+        print(f"Starting to fetch tools for {custom_mcp_id}...")
         
-        # Fetch tools with retry logic
-        print(f"Attempting to fetch tools from {mcp_url}...")
-        tools = await fetch_mcp_tools(mcp_url)
+        # Wait a moment for the service to be fully ready (already confirmed live above)
+        print(f"Waiting 5s for service to be fully ready before fetching tools...")
+        await asyncio.sleep(5)
+        
+        # Try fetching tools (service should already be live, but allow a few retries)
+        tools = []
+        for attempt in range(3):  # Try 3 times max
+            if attempt > 0:
+                wait_time = 5  # 5 seconds between retries
+                print(f"Waiting {wait_time}s before retry {attempt + 1}...")
+                await asyncio.sleep(wait_time)
+            
+            print(f"Attempting to fetch tools from {mcp_url} (attempt {attempt + 1}/3)...")
+            tools = await fetch_mcp_tools(mcp_url)
+            
+            if tools:
+                print(f"Successfully fetched {len(tools)} tools on attempt {attempt + 1}")
+                break
         
         if not tools:
-            # If first attempt failed, try again after another 10s
-            print(f"No tools fetched, waiting another 10s before retry...")
-            await asyncio.sleep(10)
-            tools = await fetch_mcp_tools(mcp_url)
+            print(f"Failed to fetch tools after 3 attempts for {custom_mcp_id}")
         
         # Create a new database session for this async task
         from database import SessionLocal
@@ -1116,18 +1127,22 @@ async def add_custom_mcp(
         if not mcp_url:
             raise HTTPException(status_code=400, detail="Could not get service URL from Render")
         
-        # Resume service if suspended, then wake it up
+        # Resume service if suspended, then wait for it to become live
         service_status = service_data.get("suspended", "not_suspended")
         if service_status == "suspended":
             try:
                 # Resume the service if it's suspended
                 print(f"Service {request.service_id} is suspended, resuming...")
                 render_client.resume_service(request.service_id)
-                # Wait briefly for resume to process
-                await asyncio.sleep(5)
+                
+                # Don't wait here - send wake-up request first, then poll
+                # (replicates manual "Wake Up Service" button flow)
+                    
             except Exception as e:
                 # Continue anyway, maybe the service will wake up naturally
-                print(f"Could not resume service {request.service_id}: {e}")
+                print(f"Could not resume or wait for service {request.service_id}: {e}")
+                import traceback
+                traceback.print_exc()
                 pass
         
         # Wake up the service by sending a simple HTTP request
@@ -1144,10 +1159,30 @@ async def add_custom_mcp(
                     print(f"Wake-up request returned {e.response.status_code} (may be rate limited)")
                 except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError) as e:
                     # Connection/timeout errors are okay - service is sleeping
-                    print(f"Wake-up request failed (service waking): {e}")
+                    print(f"Wake-up request failed (service waking): {e}") 
         except Exception as e:
             # Don't block on wake-up failures
             print(f"Wake-up request error (non-blocking): {e}")
+        
+        # Poll for service to become live (exactly like manual wake-up button)
+        print(f"Polling for service {request.service_id} to become live...")
+        max_wait_time = 120  # 2 minutes (same as frontend)
+        check_interval = 5  # Check every 5 seconds (same as frontend)
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            await asyncio.sleep(check_interval)
+            elapsed_time += check_interval
+            
+            status = get_service_status(request.service_id, mcp_url, render_client)
+            print(f"Service {request.service_id} status after {elapsed_time}s: {status}")
+            
+            if status == "live":
+                print(f"Service {request.service_id} is now live!")
+                break
+        
+        if elapsed_time >= max_wait_time:
+            print(f"Service {request.service_id} did not become live within {max_wait_time}s")
         
         print(f"Service {request.service_id} prepared, tools will be fetched in background")
         
