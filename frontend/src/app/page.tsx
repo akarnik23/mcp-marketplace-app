@@ -577,6 +577,9 @@ export default function Home() {
       }
 
       const data = await response.json();
+      console.log('[DEBUG] Response data:', data);
+      console.log('[DEBUG] needs_wakeup:', data.needs_wakeup);
+      console.log('[DEBUG] mcp_url:', data.mcp_url);
 
       // Refresh custom MCPs immediately
       await loadDeployments();
@@ -594,6 +597,8 @@ export default function Home() {
         }).catch((error) => {
           console.log('Wake-up ping sent (error expected):', error);
         });
+      } else {
+        console.log('[DEBUG] Skipping wake-up ping. needs_wakeup:', data.needs_wakeup, 'mcp_url:', data.mcp_url);
       }
 
       // Poll for tools update after service has time to boot
