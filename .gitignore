@@ -79,3 +79,4 @@ out/
 *.tar.gz
 
 backend/smithery_cache.json
+CLAUDE.md

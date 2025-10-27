@@ -582,17 +582,10 @@ export default function Home() {
       await loadDeployments();
       alert('Custom MCP added successfully! Tools will be fetched in the background.');
 
-      // If service needs wake-up, automatically trigger it (just like the wake-up button)
-      if (data.needs_wakeup && data.mcp_url && data.id) {
-        console.log('Service needs wake-up, triggering wake-up automatically...');
-        // Use the custom MCP ID as the templateKey for wake-up tracking
-        await wakeUpService(data.id, data.mcp_url);
-      } else {
-        // If service doesn't need wake-up, still poll for tools update
-        setTimeout(async () => {
-          await loadDeployments();
-        }, 20000); // Poll after 20 seconds
-      }
+      // Poll for tools update
+      setTimeout(async () => {
+        await loadDeployments();
+      }, 20000); // Poll after 20 seconds
     } catch (error) {
       console.error('Error adding custom MCP:', error);
       throw error;
