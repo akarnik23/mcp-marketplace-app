@@ -1079,7 +1079,7 @@ export default function Home() {
                 <p className="text-sm sm:text-base" style={{ color: '#718392' }}>Deploy MCPs to your Render account and connect to Poke</p>
                 </div>
                 {user && (
-                  <div className="flex flex-col items-start sm:items-end gap-2 self-end sm:self-auto">
+                  <div className="flex flex-col items-end gap-2 self-end sm:self-auto">
                     <div className="flex gap-2">
                       <button
                         onClick={() => setShowAddCustomModal(true)}

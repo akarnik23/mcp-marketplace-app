@@ -137,7 +137,9 @@ export const MCPCard = ({
     }
   };
 
-  const isCopied = localCopiedUrl === deployment?.url;
+  // Check if copied URL matches the deployment URL with /mcp appended
+  const mcpUrl = deployment?.url ? (deployment.url.endsWith('/') ? `${deployment.url}mcp` : `${deployment.url}/mcp`) : '';
+  const isCopied = localCopiedUrl === mcpUrl;
 
   return (
     <div className="rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow flex flex-col" 
