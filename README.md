@@ -12,6 +12,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - 🌐 **Environment Variables** - Easy configuration of MCP environment variables
 - ⚡ **Performance Optimized** - Parallel processing and caching for fast loading
 - 🔒 **Production Ready** - PostgreSQL database, encrypted storage, JWT tokens (24hr expiry)
+- 📊 **Error Tracking** - Sentry integration for production monitoring and debugging
 - 📱 **Mobile Optimized** - Progressive Web App (PWA) with iOS home screen support
 - 🎨 **Responsive Design** - Beautiful UI on desktop, tablet, and mobile
 
@@ -28,9 +29,11 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - **FastMCP Integration** - Dynamic tool detection from MCP servers
 - **Performance Caching** - In-memory caching for API calls and service status
 - **Parallel Processing** - Concurrent service status checks
+- **Sentry Error Tracking** - Production error monitoring with 10% performance sampling
+- **Structured Logging** - Python logging module for better observability
 
 ### Frontend (`/frontend`)
-- **Next.js** - React framework with TypeScript
+- **Next.js 15** - React framework with TypeScript and App Router
 - **Tailwind CSS** - Modern styling with dramatic gradients and responsive design
 - **Progressive Web App (PWA)** - Add to home screen on iOS with full-screen support
 - **GitHub OAuth** - User authentication flow
@@ -39,6 +42,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - **Custom MCP Management** - Add, configure, and manage your own MCPs
 - **Performance Optimized** - Sequential loading to prevent connection bottlenecks
 - **Mobile First** - Responsive breakpoints and iOS safe area handling
+- **Sentry Error Tracking** - Client-side error monitoring with session replay
 
 ## Quick Start
 
@@ -96,11 +100,14 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 - `ENCRYPTION_KEY` - Fernet key for encrypting user data (generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
 - `FRONTEND_URL` - Frontend URL for CORS configuration
 - `SMITHERY_API_KEY` - Smithery Registry API key for MCP discovery
+- `SENTRY_DSN` - Sentry DSN for backend error tracking (optional but recommended)
+- `ENVIRONMENT` - Environment name for Sentry (defaults to "production")
 
 See `backend/env.example` for detailed configuration examples.
 
 ### Frontend
 - `NEXT_PUBLIC_API_URL` - Backend API URL
+- `NEXT_PUBLIC_SENTRY_DSN` - Sentry DSN for frontend error tracking (optional but recommended)
 
 ## API Endpoints
 
@@ -154,6 +161,8 @@ See `backend/env.example` for detailed configuration examples.
 - **Resume Suspended Services** - Automatically resumes suspended services when re-adding
 - **Custom Icons** - Choose from 30+ icons to represent your MCP
 - **Delete & Suspend** - Remove MCPs and suspend services on Render
+
+**Naming Requirements:** For automatic detection, your Render service name should contain `mcp`, `fastmcp`, or `server` (e.g., "weather-mcp", "my-server", "fastmcp-tool"). Services without these keywords in their name or repository URL won't appear in the service selection list.
 
 ### Smithery MCPs (Pre-hosted)
 - **Dynamic Discovery** - Curated from Smithery Registry
