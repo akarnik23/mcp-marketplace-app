@@ -113,7 +113,7 @@ export const AddCustomMCPModal = ({
               Select Render Service *
             </label>
             <p className="text-xs text-gray-400 mb-3">
-              Note: Your Render service name should contain "mcp", "fastmcp", or "server" for automatic detection (e.g., "weather-mcp", "my-server").
+              Note: Your Render service name should contain &quot;mcp&quot;, &quot;fastmcp&quot;, or &quot;server&quot; for automatic detection (e.g., &quot;weather-mcp&quot;, &quot;my-server&quot;).
             </p>
             {availableServices.length === 0 ? (
               <div className="p-4 rounded-lg" style={{ background: '#000000', border: '1px solid #718392' }}>
