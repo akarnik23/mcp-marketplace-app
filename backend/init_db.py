@@ -4,13 +4,14 @@ Database initialization script for MCP Marketplace
 Creates tables if they don't exist and handles migrations
 """
 
-from database import create_tables, SessionLocal, engine
-from sqlalchemy import inspect
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables FIRST (before importing database)
 load_dotenv()
+
+from database import create_tables, SessionLocal, engine
+from sqlalchemy import inspect
 
 def init_database():
     """Initialize database tables if they don't exist"""

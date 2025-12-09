@@ -20,7 +20,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 
 ### Backend (`/backend`)
 - **FastAPI** - Modern Python web framework
-- **PostgreSQL** - Production database with UUID primary keys
+- **PostgreSQL (Neon)** - Production database with UUID primary keys
 - **SQLAlchemy** - ORM with proper relationships and connection pooling
 - **JWT Authentication** - Secure token-based auth
 - **Encryption** - Fernet encryption for sensitive data
@@ -92,7 +92,7 @@ A production-ready marketplace for Model Context Protocol (MCP) servers with bot
 ## Environment Variables
 
 ### Backend
-- `DATABASE_URL` - PostgreSQL connection string
+- `DATABASE_URL` - PostgreSQL connection string (Neon: https://neon.tech - free tier available)
 - `GITHUB_CLIENT_ID` - GitHub OAuth app client ID
 - `GITHUB_CLIENT_SECRET` - GitHub OAuth app client secret
 - `GITHUB_REDIRECT_URI` - OAuth callback URL (points to backend: `/auth/github/callback`)
